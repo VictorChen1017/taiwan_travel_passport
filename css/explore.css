@@ -1,0 +1,1475 @@
+/* 迷霧探索成就頁（js/explore.js）；複製自原專案 dashboard/explore.css */
+
+/* 模組變數只當別名，指向 --c-*；彈窗掛在 body 下，也要定義 */
+#explore,
+.ex-modal {
+    --ex-accent: var(--c-accent);
+    --ex-accent-dark: var(--c-accent-strong);
+    --ex-border: var(--c-border);
+    --ex-text: var(--c-text);
+    --ex-muted: var(--c-text-muted);
+    --ex-fog: var(--c-fog);
+}
+
+#explore {
+    grid-column: span 3;
+    padding: 18px 20px 20px;
+    background: var(--c-surface);
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+    color: var(--ex-text);
+    font-size: 14px;
+}
+
+.ex-loading,
+.ex-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--ex-muted);
+}
+
+/* ---------- 標題列與分段按鈕 ---------- */
+
+.ex-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin-bottom: 14px;
+}
+
+.ex-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.ex-hint {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--ex-muted);
+}
+
+.ex-seg {
+    display: inline-flex;
+    padding: 3px;
+    background: var(--c-surface-3);
+    border-radius: 8px;
+}
+
+.ex-seg button {
+    min-width: 56px;
+    height: 28px;
+    padding: 0 12px;
+    font-size: 13px;
+    color: var(--ex-muted);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.ex-seg button:hover {
+    color: var(--ex-text);
+}
+
+.ex-seg button.active {
+    color: var(--ex-accent-dark);
+    font-weight: bold;
+    background: var(--c-surface);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- 卡片格線 ---------- */
+
+.ex-grid {
+    display: grid;
+    grid-template-columns: minmax(300px, 1.1fr) 1fr 1fr;
+    grid-template-areas:
+        "map progress recent"
+        "map yearly yearly";
+    gap: 14px;
+}
+
+.ex-card {
+    min-width: 0;
+    padding: 12px 14px;
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+}
+
+.ex-card-title {
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.ex-card-title small {
+    font-weight: normal;
+    color: var(--ex-muted);
+}
+
+.ex-mapcard { grid-area: map; display: flex; flex-direction: column; }
+.ex-progress { grid-area: progress; }
+.ex-recent { grid-area: recent; }
+.ex-yearly { grid-area: yearly; }
+
+@media (max-width: 1100px) {
+    .ex-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+            "map progress"
+            "map recent"
+            "yearly yearly";
+    }
+}
+
+@media (max-width: 700px) {
+    .ex-grid {
+        grid-template-columns: 1fr;
+        grid-template-areas: "map" "progress" "recent" "yearly";
+    }
+}
+
+/* ---------- 迷霧小地圖 ---------- */
+
+.ex-mapwrap {
+    position: relative;
+    flex: 1;
+    min-height: 420px;
+    background: var(--c-surface-3);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: zoom-in;
+    outline: none;
+    transition: box-shadow 0.15s;
+}
+
+.ex-mapwrap:hover,
+.ex-mapwrap:focus-visible {
+    box-shadow: inset 0 0 0 2px rgba(255, 77, 26, 0.45);
+}
+
+.ex-mapwrap .ex-map path {
+    cursor: zoom-in;
+}
+
+.ex-zoom-hint {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: var(--ex-text);
+    background: color-mix(in srgb, var(--c-surface) 85%, transparent);
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+/* 村里層級：不畫內嵌地圖，只留可點擊開啟大圖的區塊 */
+.ex-village-open {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+    background: repeating-linear-gradient(45deg, var(--c-surface-3) 0 14px, var(--c-surface-3) 14px 28px);
+}
+
+.ex-village-open[hidden] {
+    display: none;
+}
+
+.ex-village-icon {
+    font-size: 44px;
+}
+
+.ex-village-text {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.ex-village-sub {
+    font-size: 13px;
+    color: var(--ex-muted);
+}
+
+.ex-map {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 420px;
+}
+
+.ex-map path {
+    stroke: var(--c-surface);
+    stroke-width: 0.6px;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+    cursor: default;
+}
+
+.ex-map.fine path {
+    stroke-width: 0.25px;
+}
+
+.ex-map path.off {
+    fill: var(--ex-fog);
+    fill-opacity: 0.75;
+}
+
+.ex-map path:hover {
+    stroke: var(--ex-text);
+    stroke-width: 1.5px;
+}
+
+.ex-map-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ex-muted);
+    background: color-mix(in srgb, var(--c-surface-3) 70%, transparent);
+}
+
+.ex-map-loading[hidden],
+.ex-tip[hidden] {
+    display: none;
+}
+
+.ex-tip {
+    position: absolute;
+    z-index: 2;
+    max-width: 200px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--c-on-accent);
+    background: var(--c-tooltip-bg);
+    border-radius: 6px;
+    pointer-events: none;
+}
+
+.ex-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--ex-muted);
+}
+
+.ex-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ex-legend .sw {
+    display: inline-block;
+    width: 28px;
+    height: 10px;
+    border-radius: 3px;
+}
+
+.ex-legend .sw.fog {
+    width: 14px;
+    background: var(--ex-fog);
+    opacity: 0.75;
+}
+
+.ex-legend .sw.grad {
+    background: linear-gradient(90deg, rgb(255, 226, 205), rgb(232, 74, 23));
+}
+
+/* ---------- 探索率 ---------- */
+
+.ex-donut-svg {
+    display: block;
+    width: 170px;
+    height: 170px;
+    margin: 0 auto;
+}
+
+.ex-donut-bg {
+    fill: none;
+    stroke: var(--c-border);
+    stroke-width: 14;
+}
+
+.ex-donut-fg {
+    fill: none;
+    stroke: var(--ex-accent);
+    stroke-width: 14;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.4s;
+}
+
+.ex-donut-pct {
+    font-size: 22px;
+    font-weight: bold;
+    text-anchor: middle;
+    fill: var(--ex-text);
+}
+
+.ex-donut-label {
+    font-size: 11px;
+    text-anchor: middle;
+    fill: var(--ex-muted);
+}
+
+.ex-progress-sub {
+    margin-top: 6px;
+    text-align: center;
+    line-height: 1.7;
+}
+
+.ex-progress-sub b {
+    font-size: 18px;
+}
+
+.ex-progress-sub span {
+    font-size: 12px;
+    color: var(--ex-muted);
+}
+
+/* ---------- 最近解鎖 ---------- */
+
+.ex-recent-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ex-recent-list li {
+    display: grid;
+    grid-template-columns: 82px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 5px 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--c-border);
+}
+
+.ex-recent-list li:last-child {
+    border-bottom: none;
+}
+
+.ex-recent-date {
+    color: var(--ex-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.ex-recent-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ex-recent-n {
+    font-size: 12px;
+    color: var(--ex-accent-dark);
+    font-weight: bold;
+}
+
+.ex-yearly-chart {
+    width: 100%;
+    min-height: 240px;
+}
+
+/* ---------- 明細 ---------- */
+
+.ex-table {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
+    gap: 2px 24px;
+}
+
+.ex-row {
+    display: grid;
+    grid-template-columns: minmax(70px, 110px) minmax(80px, 110px) 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--c-border);
+}
+
+.ex-row.locked .ex-row-name,
+.ex-row.locked .ex-row-date {
+    color: var(--c-text-faint);
+}
+
+.ex-row-name {
+    font-weight: bold;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ex-row-date {
+    font-size: 12px;
+    color: var(--ex-muted);
+}
+
+.ex-bar {
+    height: 8px;
+    background: var(--c-border);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.ex-bar-fill {
+    height: 100%;
+    background: #ff8a5c;
+    border-radius: 999px;
+}
+
+.ex-bar-fill.full {
+    background: var(--ex-accent);
+}
+
+.ex-bar-text {
+    font-size: 12px;
+    color: var(--ex-muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ex-tag {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 0 6px;
+    font-size: 11px;
+    color: var(--c-on-accent);
+    background: var(--ex-accent);
+    border-radius: 999px;
+    vertical-align: 1px;
+}
+
+.ex-group {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--c-border);
+}
+
+.ex-group-head {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.ex-group-head span:not(.ex-tag) {
+    font-size: 12px;
+    color: var(--ex-muted);
+}
+
+.ex-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.ex-chip {
+    padding: 2px 9px;
+    font-size: 12px;
+    color: var(--c-text-faint);
+    background: var(--c-surface-3);
+    border-radius: 999px;
+    cursor: default;
+}
+
+.ex-chip.on {
+    color: var(--c-accent-strong);
+    background: var(--c-accent-soft);
+}
+
+.ex-fold {
+    border-bottom: 1px solid var(--c-border);
+}
+
+.ex-fold summary {
+    display: grid;
+    grid-template-columns: 110px 1fr 140px;
+    gap: 10px;
+    align-items: center;
+    padding: 7px 0;
+    cursor: pointer;
+    list-style: none;
+}
+
+.ex-fold summary::-webkit-details-marker {
+    display: none;
+}
+
+.ex-fold summary .ex-row-name::before {
+    content: "▸ ";
+    color: var(--ex-muted);
+}
+
+.ex-fold[open] summary .ex-row-name::before {
+    content: "▾ ";
+}
+
+.ex-fold .ex-table {
+    padding: 0 0 10px 18px;
+}
+
+
+/* ---------- 可展開的整列區塊（成就徽章、明細） ---------- */
+
+.ex-section {
+    margin-top: 16px;
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+}
+
+.ex-section > summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    cursor: pointer;
+    list-style: none;
+    border-radius: 10px;
+    transition: background 0.15s;
+}
+
+.ex-section > summary::-webkit-details-marker {
+    display: none;
+}
+
+.ex-section > summary:hover {
+    background: var(--c-hover);
+}
+
+.ex-section > summary::after {
+    content: "▾";
+    margin-left: 4px;
+    color: var(--ex-muted);
+    transition: transform 0.2s;
+}
+
+.ex-section[open] > summary::after {
+    transform: rotate(180deg);
+}
+
+.ex-section[open] > summary {
+    border-bottom: 1px solid var(--c-border);
+    border-radius: 10px 10px 0 0;
+}
+
+.ex-section-title {
+    font-size: 17px;
+    font-weight: bold;
+}
+
+.ex-section-hint {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--ex-muted);
+}
+
+.ex-section[open] .ex-section-hint {
+    visibility: hidden;
+}
+
+/* 成就徽章：底色與其他區塊相同（淺灰）；摺疊時標題列下方顯示各大類進度卡（3 欄），展開後隱藏 */
+.ex-badges-sec > summary {
+    flex-wrap: wrap;
+}
+
+/* 展開箭頭留在標題那一列（總覽排在最後） */
+.ex-badges-sec > summary::after {
+    order: 1;
+}
+
+.ex-ach-overview {
+    order: 2;
+    flex-basis: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 6px 0 4px;
+}
+
+/* 視窗變窄時減少欄數（左側選單固定寬度，內容區比視窗窄很多） */
+@media (max-width: 1200px) {
+    .ex-ach-overview {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .ex-ach-overview {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+
+    /* 窄畫面：圓環在上、文字在下 */
+    .ex-ach-ring {
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px 8px;
+        text-align: center;
+    }
+
+    .ex-ach-ring svg {
+        width: 72px;
+        height: 72px;
+    }
+
+    .ex-ach-ring-text {
+        align-items: center;
+    }
+
+    .ex-ach-ring-text b {
+        font-size: 14px;
+    }
+}
+
+.ex-badges-sec[open] .ex-ach-overview {
+    display: none;
+}
+
+.ex-ach-ring {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 18px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.ex-badges-sec > summary:hover .ex-ach-ring {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.ex-ach-ring:hover {
+    transform: translateY(-2px);
+}
+
+.ex-ach-ring svg {
+    flex: none;
+    width: 88px;
+    height: 88px;
+}
+
+.ex-ach-ring .ex-donut-bg,
+.ex-ach-ring .ex-donut-fg {
+    stroke-width: 8;
+}
+
+.ex-ach-ring-pct {
+    font-size: 16px;
+    font-weight: bold;
+    text-anchor: middle;
+    fill: var(--ex-text);
+}
+
+.ex-ach-ring-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.ex-ach-ring-text b {
+    font-size: 17px;
+    color: var(--ex-text);
+}
+
+.ex-ach-ring-text span {
+    font-size: 15px;
+    color: var(--ex-text);
+}
+
+.ex-ach-ring-text small {
+    font-size: 12px;
+    color: var(--ex-muted);
+}
+
+.ex-ach-ring-text small.full {
+    color: var(--c-success-strong);
+    font-weight: bold;
+}
+
+.ex-ach-ring {
+    cursor: pointer;
+}
+
+/* 從總覽跳過來時，目標類別短暫加底色提示 */
+.ex-badge-group {
+    scroll-margin-top: 12px;
+}
+
+.ex-badge-group.ex-flash {
+    animation: ex-flash 1.6s ease-out;
+}
+
+@keyframes ex-flash {
+    0%, 30% { background: var(--c-border); }
+    100% { background: transparent; }
+}
+
+.ex-detail {
+    padding: 8px 18px 16px;
+}
+
+/* 明細的字放大一些 */
+.ex-detail .ex-group-head b {
+    font-size: 16px;
+}
+
+.ex-detail .ex-group-head span:not(.ex-tag) {
+    font-size: 14px;
+}
+
+.ex-detail .ex-chip {
+    padding: 4px 12px;
+    font-size: 14px;
+}
+
+.ex-detail .ex-row-name {
+    font-size: 15px;
+}
+
+.ex-detail .ex-row-date,
+.ex-detail .ex-bar-text {
+    font-size: 13px;
+}
+
+/* ---------- 成就徽章 ---------- */
+
+.ex-badges {
+    padding: 8px 18px 18px;
+}
+
+.ex-badge-count {
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--ex-accent-dark);
+}
+
+.ex-badge-group {
+    margin-top: 14px;
+}
+
+.ex-badge-group-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-left: 12px;
+    font-size: 19px;
+    font-weight: bold;
+    border-left: 5px solid var(--ex-accent);
+}
+
+.ex-badge-group-title.g-conquer { border-color: #e0a526; }
+.ex-badge-group-title.g-pole { border-color: #3fa7c2; }
+.ex-badge-group-title.g-island { border-color: #14b8a6; }
+.ex-badge-group-title.g-landmark { border-color: #ec4899; }
+.ex-badge-group-title.g-bspot { border-color: #7c3aed; }
+.ex-badge-group-title.g-peak { border-color: #0f766e; }
+.ex-badge-group-title.g-rail { border-color: #0284c7; }
+.ex-badge-group-title.g-metro { border-color: #d90023; }
+.ex-badge-group-title.g-lrt { border-color: #7cbd52; }
+.ex-badge-group-title.g-nature { border-color: #16a34a; }
+.ex-badge-group-title.g-travel { border-color: #8b5cf6; }
+
+.ex-badge-group-title span {
+    font-size: 14px;
+    font-weight: normal;
+    color: var(--ex-muted);
+}
+
+/* 類別可收合 */
+summary.ex-badge-group-title {
+    cursor: pointer;
+    list-style: none;
+}
+
+summary.ex-badge-group-title::-webkit-details-marker {
+    display: none;
+}
+
+summary.ex-badge-group-title::after {
+    content: "▾";
+    font-size: 14px;
+    color: var(--ex-muted);
+    transition: transform 0.2s;
+}
+
+.ex-badge-group:not([open]) > summary.ex-badge-group-title::after {
+    transform: rotate(-90deg);
+}
+
+/* 類別內的分區小標題（例如鄉鎮／村里、澎湖／金門／馬祖、北部／中部） */
+.ex-badge-sub {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 16px 0 10px;
+    padding-bottom: 4px;
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--c-text);
+    border-bottom: 1px dashed var(--c-border);
+}
+
+.ex-badge-sub span {
+    font-size: 13px;
+    font-weight: normal;
+    color: var(--ex-muted);
+}
+
+/* 徽章置中排列（每一列都置中，包含最後不滿的一列），依畫面寬度自動換行 */
+.ex-badge-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
+}
+
+.ex-badge-grid > .ex-badge {
+    flex: 0 1 200px;
+    min-width: 170px;
+}
+
+.ex-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px 14px;
+    text-align: center;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.ex-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+/* 深色模式：徽章卡加外框；已達成用強調色外框，與未達成區分 */
+:root[data-theme="dark"] .ex-badge {
+    border: 1px solid var(--c-border-strong);
+}
+
+:root[data-theme="dark"] .ex-badge.done {
+    border-color: var(--c-accent);
+    background: var(--c-accent-soft);
+}
+
+.ex-badge.done {
+    background: var(--c-accent-soft);
+    border-color: var(--c-accent-soft);
+}
+
+.ex-badge-svg {
+    width: 76px;
+    height: 76px;
+    margin-bottom: 6px;
+}
+
+.ex-badge:not(.done) .ex-badge-svg {
+    filter: grayscale(0.2);
+}
+
+.ex-badge-name {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.ex-tier {
+    margin-left: 5px;
+    padding: 0 6px;
+    font-size: 11px;
+    font-weight: normal;
+    color: var(--c-on-accent);
+    border-radius: 4px;
+    vertical-align: 2px;
+}
+
+.t-bronze { background: #c27c4e; }
+.t-silver { background: #8e9aa8; }
+.t-gold { background: #e0a526; }
+.t-platinum { background: #3fa7c2; }
+.t-legend { background: #8b5cf6; }
+
+.ex-badge-desc {
+    font-size: 13.5px;
+    color: var(--ex-muted);
+    line-height: 1.5;
+}
+
+.ex-badge-note {
+    font-size: 12.5px;
+    color: var(--ex-muted);
+    line-height: 1.5;
+}
+
+.ex-badge-date {
+    margin-top: 4px;
+    font-size: 14px;
+    color: var(--ex-accent-dark);
+    font-weight: bold;
+}
+
+.ex-badge-prog {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--ex-muted);
+}
+
+.ex-badge-prog .ex-bar {
+    flex: 1;
+    height: 7px;
+}
+
+.ex-badge-prog span:only-child {
+    width: 100%;
+    text-align: center;
+}
+
+/* 地點類小卡片 */
+.ex-badge-grid.compact {
+    gap: 10px;
+}
+
+.ex-badge-grid.compact > .ex-badge {
+    flex: 0 1 150px;
+    min-width: 130px;
+}
+
+.ex-badge.compact {
+    gap: 2px;
+    padding: 10px 8px;
+}
+
+.ex-badge.compact .ex-badge-svg {
+    width: 50px;
+    height: 50px;
+    margin-bottom: 4px;
+}
+
+.ex-badge.compact .ex-badge-name {
+    font-size: 14.5px;
+}
+
+.ex-badge.compact .ex-badge-desc {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.ex-badge.compact .ex-badge-date {
+    font-size: 13px;
+}
+
+/* 可點開明細的卡片 */
+.ex-badge.clickable {
+    cursor: pointer;
+}
+
+.ex-badge.clickable:hover {
+    border-color: var(--ex-accent);
+}
+
+.ex-badge.clickable:focus-visible {
+    outline: 2px solid var(--ex-accent);
+    outline-offset: 2px;
+}
+
+.ex-badge-more {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--ex-accent-dark);
+    opacity: 0.75;
+}
+
+.ex-badge.clickable:hover .ex-badge-more {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+/* 縣市制霸集點卡：單獨一整列 */
+.ex-stamp {
+    margin-bottom: 14px;
+    padding: 18px 20px;
+    align-items: stretch;
+    text-align: left;
+}
+
+.ex-stamp:hover {
+    transform: none;
+}
+
+.ex-stamp-head {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+
+.ex-stamp-head .ex-badge-svg {
+    flex: none;
+}
+
+.ex-stamp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.ex-stamp-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 4px;
+    font-size: 14px;
+    color: var(--c-text-faint);
+    background: var(--c-surface-3);
+    border: 1px dashed var(--c-border-strong);
+    border-radius: 8px;
+    cursor: default;
+}
+
+.ex-stamp-cell small {
+    font-size: 12px;
+}
+
+.ex-stamp-cell.on {
+    color: var(--c-on-accent);
+    background: var(--ex-accent);
+    border: 1px solid var(--ex-accent-dark);
+}
+
+/* 百岳、小百岳集點卡：100 格，格子小一點；整張卡可點開明細 */
+.ex-stamp-peak {
+    cursor: pointer;
+}
+
+.ex-stamp-peak .ex-stamp-grid {
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+    gap: 6px;
+}
+
+.ex-stamp-peak .ex-stamp-cell {
+    padding: 6px 2px;
+    font-size: 13px;
+    cursor: inherit;
+}
+
+.ex-stamp-peak .ex-stamp-cell:hover {
+    outline: 2px solid var(--c-text-strong);
+    outline-offset: -1px;
+}
+
+.ex-stamp-peak .ex-stamp-cell b {
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.ex-stamp-peak .ex-badge-more {
+    margin-top: 4px;
+    text-align: left;
+}
+
+/* 臺鐵格子依站級上色（資料色，兩種主題相同）：到過的整格上色，沒到過的只在底線標示 */
+.ex-stamp-cell.g-bronze { --grade: #c27c4e; }
+.ex-stamp-cell.g-silver { --grade: #8e9aa8; }
+.ex-stamp-cell.g-gold { --grade: #e0a526; }
+
+.ex-stamp-cell[class*="g-"] {
+    border-bottom: 3px solid var(--grade);
+}
+
+.ex-stamp-cell.on[class*="g-"] {
+    background: var(--grade);
+    border-color: color-mix(in srgb, var(--grade) 75%, #000);
+}
+
+.ex-grade-legend {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: normal;
+    color: var(--c-text-muted);
+}
+
+.ex-grade-legend i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin: 0 3px 0 8px;
+    vertical-align: -1px;
+    border-radius: 2px;
+}
+
+.ex-grade-legend .g-bronze { background: #c27c4e; }
+.ex-grade-legend .g-silver { background: #8e9aa8; }
+.ex-grade-legend .g-gold { background: #e0a526; }
+
+/* 捷運、輕軌格子依路線上色（資料色，兩種主題相同）：沒到過的在底部畫路線色條，到過的整格上色；
+   轉乘站 --lc1／--lc2 兩色，到過時斜線對分 */
+.ex-stamp-cell.lined {
+    background-image: linear-gradient(to right, var(--lc1) 50%, var(--lc2) 50%);
+    background-size: 100% 3px;
+    background-position: bottom;
+    background-repeat: no-repeat;
+}
+
+.ex-stamp-cell.lined.on {
+    background: linear-gradient(135deg, var(--lc1) 50%, var(--lc2) 50%);
+    border-color: transparent;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.7);   /* 黃、橘等淺色路線上的白字 */
+}
+
+/* ---------- 迷霧地圖放大彈窗 ---------- */
+
+body.ex-modal-open {
+    overflow: hidden;
+}
+
+.ex-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3vh 3vw;
+    background: var(--c-backdrop);
+    font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+}
+
+.ex-modal[hidden] {
+    display: none;
+}
+
+.ex-modal-box {
+    display: flex;
+    flex-direction: column;
+    width: min(1100px, 100%);
+    height: 100%;
+    padding: 14px 16px;
+    background: var(--c-surface);
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.ex-modal-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    margin-bottom: 10px;
+}
+
+.ex-modal-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--c-text);
+}
+
+.ex-modal-hint {
+    font-size: 12px;
+    color: var(--c-text-muted);
+}
+
+.ex-modal-tools {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.ex-modal-tools button {
+    min-width: 34px;
+    height: 32px;
+    padding: 0 10px;
+    font-size: 14px;
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.ex-modal-tools button:hover {
+    background: var(--c-surface-3);
+}
+
+.ex-modal-tools .ex-modal-x {
+    font-size: 16px;
+}
+
+.ex-modal-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    background: var(--c-surface-3);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.ex-modal-map {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.ex-modal-map.dragging,
+.ex-modal-map.dragging path {
+    cursor: grabbing;
+}
+
+.ex-modal .ex-map-loading {
+    color: var(--c-text-muted);
+}
+
+.ex-modal .ex-map path.off {
+    fill: var(--c-text-faint);
+    fill-opacity: 0.75;
+}
+
+.ex-modal .ex-map path:hover {
+    stroke: var(--c-text);
+}
+
+.ex-modal .ex-legend {
+    color: var(--c-text-muted);
+}
+
+.ex-modal .ex-legend .sw.fog {
+    background: var(--c-fog);
+}
+
+/* ---------- 成就明細彈窗 ---------- */
+
+.ex-dmodal {
+    --ex-accent: var(--c-accent);
+    --ex-accent-dark: var(--c-accent-strong);
+    --ex-text: var(--c-text);
+    --ex-muted: var(--c-text-muted);
+}
+
+.ex-dmodal-box {
+    width: min(760px, 100%);
+    height: auto;
+    max-height: 100%;
+}
+
+.ex-dmodal .ex-modal-title {
+    flex: none;
+}
+
+.ex-dmodal-desc {
+    font-size: 13px;
+}
+
+.ex-dmodal .ex-dmodal-sort button {
+    min-width: 0;
+    height: 26px;
+    padding: 0 10px;
+    font-size: 13px;
+    color: var(--ex-muted);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+}
+
+.ex-dmodal .ex-dmodal-sort button.active {
+    color: var(--ex-accent-dark);
+    font-weight: bold;
+    background: var(--c-surface);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.ex-dmodal-note {
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--ex-muted);
+}
+
+/* 地點類成就的小地圖 */
+.ex-dmap {
+    flex: none;
+    height: 260px;
+    margin-bottom: 10px;
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.ex-dmap[hidden] {
+    display: none;
+}
+
+.ex-dmodal-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+}
+
+.ex-drow {
+    display: grid;
+    grid-template-columns: 9em 7em 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 9px 14px;
+    font-size: 14px;
+    color: var(--ex-text);
+    border-bottom: 1px solid var(--c-border);
+}
+
+.ex-drow > span:last-child {
+    color: var(--ex-muted);
+}
+
+.ex-dhead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-size: 12.5px;
+    font-weight: bold;
+    color: var(--ex-muted);
+    background: var(--c-surface-2);
+}
+
+.ex-drow.miss,
+.ex-dfold.miss > .ex-drow {
+    color: var(--c-text-faint);
+}
+
+/* 老地方：第一欄是較長的村里名稱 */
+.ex-dmodal-body.name-first .ex-drow {
+    grid-template-columns: 1fr 6em 7em;
+}
+
+.ex-dfold > summary.ex-drow {
+    cursor: pointer;
+    list-style: none;
+}
+
+.ex-dfold > summary.ex-drow::-webkit-details-marker {
+    display: none;
+}
+
+.ex-dfold > summary.ex-drow > span:first-child::before {
+    content: "▸ ";
+    color: var(--ex-muted);
+}
+
+.ex-dfold[open] > summary.ex-drow > span:first-child::before {
+    content: "▾ ";
+}
+
+.ex-dfold > summary.ex-drow:hover {
+    background: var(--c-accent-soft);
+}
+
+.ex-ditems {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 8px 14px 12px 28px;
+    background: var(--c-surface-2);
+    border-bottom: 1px solid var(--c-border);
+}
+
+.ex-ditems small {
+    width: 100%;
+    color: var(--ex-muted);
+}
+
+.ex-ditems .ex-chip {
+    font-size: 12.5px;
+}
+
+@media (max-width: 600px) {
+    .ex-drow {
+        grid-template-columns: 7.5em 5.5em 1fr;
+        gap: 8px;
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+}
+
+/* ---------- 靜態版新增 ---------- */
+
+/* 兩欄的明細（地點造訪：日期／時間；登山、鐵道：名稱／首次） */
+.ex-dmodal-body.two-col .ex-drow {
+    grid-template-columns: 9em 1fr;
+}
+
+.ex-dmodal-body.two-col.name-first .ex-drow {
+    grid-template-columns: 1fr 8em;
+}
+
+@media (max-width: 600px) {
+    .ex-dmodal-body.two-col .ex-drow { grid-template-columns: 7.5em 1fr; }
+    .ex-dmodal-body.two-col.name-first .ex-drow { grid-template-columns: 1fr 7em; }
+}
+
+/* 每年新解鎖（自繪 SVG；長條色是資料色，其餘跟主題） */
+.ex-ychart {
+    display: block;
+    max-width: 100%;
+    font-size: 11px;
+    font-family: inherit;
+}
+
+.ex-ychart text {
+    fill: var(--c-text-muted);
+}
+
+.ex-ychart-legend text {
+    fill: var(--c-text);
+    font-size: 12px;
+}
+
+.ex-ychart-grid {
+    stroke: var(--c-border);
+    stroke-width: 1;
+}
+
+.ex-ychart-line {
+    fill: none;
+    stroke: var(--c-text);
+    stroke-width: 2;
+}
+
+.ex-ychart-dot {
+    fill: var(--c-text);
+}
+
+.ex-ychart-hit {
+    fill: transparent;
+}
+
+.ex-ychart-col:hover .ex-ychart-hit {
+    fill: var(--c-hover);
+}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>計算核心比對</title>
+<style>
+  :root { --bg: #fff; --fg: #222; --muted: #777; --ok: #15803d; --bad: #b91c1c; --line: #ddd; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #18181b; --fg: #e4e4e7; --muted: #a1a1aa; --ok: #4ade80; --bad: #f87171; --line: #3f3f46; } }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; margin: 16px; }
+  h1 { font-size: 18px; } h2 { font-size: 15px; margin-top: 20px; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .muted { color: var(--muted); }
+  table { border-collapse: collapse; margin: 6px 0; } td, th { border: 1px solid var(--line); padding: 2px 8px; text-align: left; vertical-align: top; }
+  pre { white-space: pre-wrap; margin: 0; }
+</style>
+</head>
+<body>
+<h1>計算核心比對（開發用）</h1>
+<p class="muted">以原專案的照片（test/legacy/photos.json）跑瀏覽器端計算，和原專案 explore_stats.php 的輸出（test/legacy/）逐項比對。差異容許：照片數欄位已移除、說明文字「拍照」→「有足跡」。</p>
+<div id="out">執行中…</div>
+<script type="module" src="./compare.js"></script>
+</body>
+</html>

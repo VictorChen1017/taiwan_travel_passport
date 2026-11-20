@@ -1,0 +1,322 @@
+# 手搓迷霧・靜態版　規格書
+
+> 狀態：規劃中（2026-11-20 起草，尚未實作）
+> 來源專案：`photo_monitor_ver202611`（只參考、不修改）
+
+---
+
+## 1. 目標與範圍
+
+把原專案的「迷霧探索」成就頁做成**純靜態網站**，部署在 GitHub Pages，讓任何人用自己的照片或 Google 時間軸計算台灣足跡與成就。
+
+**做的**
+- 成就頁：探索率（縣市／鄉鎮／村里 × 個數／面積）、迷霧小地圖、每年新解鎖、最近解鎖、明細、成就徽章、成就明細彈窗（含 Leaflet 小地圖）
+- 側邊欄改成**成就目錄**（點了跳到對應分類）
+- 資料來源轉接層：資料夾照片 EXIF、Google 相簿 Takeout、Google 時間軸（多種格式）
+
+**不做的**
+地圖頁、時間軸播放、匯出影片、儀表板、照片牆、編輯頁、縮圖、Synology 連線、任何後端。
+
+---
+
+## 2. 隱私原則（頁面上要明確寫出）
+
+- **所有計算都在使用者的瀏覽器內完成**，照片、座標、時間不會上傳到任何地方。
+- 網站只下載靜態檔（圖資、成就設定），不會送出任何使用者資料。
+- **不加任何追蹤、分析或第三方統計**（不使用 Google Analytics 等）。
+- 計算結果只存在使用者瀏覽器的 IndexedDB，頁面提供「清除我的資料」按鈕。
+- 首頁和匯入畫面都要放顯眼的說明，例如：「🔒 本機運算：你的照片與位置資料不會離開這台電腦」。
+- 外部請求只有兩種：CDN 套件（固定版本）和地圖圖磚。說明頁要列出這兩項，並註明圖磚請求會讓圖磚供應商看到你瀏覽的地圖範圍。
+
+---
+
+## 3. 計算模式
+
+| | 照片模式 | 造訪模式 |
+|---|---|---|
+| 使用的資料 | 只有照片（EXIF、Google 相簿 Takeout） | 所有來源合併（照片＋時間軸） |
+| 一筆資料代表 | 一張照片 | 一次「造訪紀錄」（時間＋座標） |
+| 以張數計算的成就（目前只有「老地方」） | 顯示 | **隱藏** |
+| 預設 | 只匯入照片時 | 有匯入時間軸時（含照片＋時間軸同時匯入） |
+
+- 切換按鈕只在匯入的資料含照片時出現；只有時間軸時固定為造訪模式。
+- **統計只看「首次解鎖時間」**：拿掉所有照片數欄位與「依照片數排序」。唯一例外是照片模式下以張數計算的成就與它的明細。
+- 判定一律是「任一來源、任一筆紀錄落在範圍內就算解鎖，日期取最早一筆」。
+
+### 和原專案輸出的差異（改寫 `explore_stats.php` 時照此調整）
+
+| 原專案 | 靜態版 |
+|---|---|
+| counties／towns／villages 的 `photos` | 移除 |
+| 成就的 `photos` | 移除 |
+| 地點明細欄位「日期／照片數／時間」 | 「日期／時間」，備註「共造訪 N 天」 |
+| 登山、鐵道明細「首次登頂／照片數」 | 只留「首次登頂（到站）」 |
+| 明細小地圖「在此拍的照片位置（最多 500 張）」 | 「在此的紀錄位置（最多 500 筆）」 |
+| `regular`（老地方）與它的明細 | 只在照片模式出現 |
+| 「另有 N 張照片時間不明」 | 「另有 N 筆紀錄時間不明」 |
+
+---
+
+## 4. 資料來源轉接層
+
+每種來源各寫一個轉接器，輸出統一格式：
+
+```js
+// 一筆紀錄
+{ lat, lng, time, kind, source }
+// time   ：當地時鐘時間當成 UTC 的 unix 秒（沿用原專案規則，見 §5）；不明為 null
+// kind   ：'photo' | 'visit' | 'path'（path＝移動途中的點）
+// source ：'exif' | 'gphotos' | 'gtimeline'
+```
+
+實際儲存時用 TypedArray（`Float64Array` 經緯度、`Int32Array` 時間、`Uint8Array` kind），避免數十萬個物件。
+
+### 4.1 資料夾照片 EXIF
+
+- 選擇方式：`showDirectoryPicker()`（Chrome、Edge，可記住授權）；不支援時改用 `<input type="file" webkitdirectory>`（Firefox、Safari）；也支援直接拖曳資料夾。
+- 讀取：`exifr` 只讀檔頭（GPS、`DateTimeOriginal`），支援 JPEG、HEIC、TIFF、各家 RAW 中 exifr 能解析的格式。
+- 時間：`DateTimeOriginal` 本身就是當地時鐘時間，直接當 UTC 解讀；沒有時用 `CreateDate`，再沒有就是 null（**不用檔案修改時間**）。
+- 沒有 GPS 的照片略過，畫面顯示略過幾張。
+- 影片（mp4、mov）第一版不處理。
+- 讀取時顯示進度，並且可以中途取消。
+
+### 4.2 Google 相簿 Takeout
+
+- 照片旁的 JSON 附檔：舊版是 `xxx.jpg.json`，新版是 `xxx.jpg.supplemental-metadata.json`（檔名可能被截斷，以「開頭相同」比對）。
+- 座標取 `geoData`（全 0 表示沒有座標，改用 `geoDataExif`）；時間取 `photoTakenTime.timestamp`（UTC 秒，依 §5 轉換）。
+- 只讀 JSON，不讀照片本身。附檔沒有座標時，再用照片 EXIF 補（選用）。
+- 使用者可以選解壓後的資料夾，或直接選 `.zip`（用 zip.js 只讀需要的 JSON，不整包解壓；第二階段）。
+
+### 4.3 Google 時間軸
+
+依檔案內容自動判斷格式：
+
+| 格式 | 判斷方式 | 停留點（visit） | 移動途中（path） |
+|---|---|---|---|
+| A. 舊版 Takeout `Records.json` | 有 `locations[]`，元素含 `latitudeE7` | 沒有語意資料 → 用停留偵測產生（見下方） | 所有原始點 |
+| B. 舊版 Takeout Semantic Location History（`YYYY_MONTH.json`，可一次選多個檔或整個資料夾） | 有 `timelineObjects[]` | `placeVisit.location`＋`duration.startTimestamp` | `activitySegment` 的起訖點、`waypointPath`、`simplifiedRawPath` |
+| C. Android 裝置匯出 `Timeline.json` | 有 `semanticSegments[]` | `visit.topCandidate.placeLocation.latLng`（字串 `"25.03°, 121.56°"`）＋`startTime` | `timelinePath[].point`、`activity.start／end`；另有 `rawSignals` |
+| D. iOS 裝置匯出 `location-history.json` | 最外層是陣列，元素有 `startTime`，座標格式為 `"geo:25.03,121.56"` | `visit.topCandidate.placeLocation` | `timelinePath[]`（時間是 `durationMinutesOffsetFromStartTime`）、`activity.start／end` |
+
+- **預設只算停留點**；開關「包含移動途中」打開後才加入 path 點。
+- 格式 A 的停留偵測：連續點在 200 公尺內停留 ≥ 10 分鐘，視為一次停留，座標取中心點（參數之後依實測調整）。
+- 大檔處理：時間軸檔可能有數百 MB，用 Web Worker 解析，避免頁面卡住。path 點先把座標四捨五入到約 10 公尺並去除重複。
+- 有時區偏移的 ISO 時間（`2024-05-01T08:00:00.000+08:00`）：直接取字面上的日期時刻當 UTC，也就是當地時鐘時間。
+
+---
+
+## 5. 時間規則（沿用原專案 `config/photo_time.php`）
+
+- `time` 是「當地時鐘時間當成 UTC」的 unix 秒；顯示和切日一律用 `getUTC*`。
+- 只有 UTC 的來源（Google 相簿 `photoTakenTime`、`Records.json`）：**一律加 8 小時**。成就範圍（台澎金馬、東沙、太平島）全部在 UTC+8，所以不需要依座標推算時區。
+- 異常時間（≤ 0、2147483647、超過「現在 + 14 小時」）在統計時視為「時間不明」：仍然算解鎖，但不參與日期判定。
+- 「旅行」類成就（單日跨縣市等）以當地日期切日。
+
+---
+
+## 6. 計算流程（Web Worker）
+
+✅ 第 2 階段完成（2026-11-20）。
+
+```
+匯入 → 統一紀錄（TypedArray）→ IndexedDB
+     → ① 村里判定：村里外框的格子索引（0.02°）→ 點是否在多邊形內 → villcode；towncode 取村里代碼前 8 碼
+     → ② 半徑判定：紀錄的格子索引（0.01°）→ 對山頂、車站、景點等目標查半徑內的紀錄（WGS84 橢球局部距離）
+     → ③ 保護區判定：保護區外框的格子索引 → 點是否在多邊形內
+     → ④ 彙總：改寫 explore_stats.php 的統計與成就邏輯（依 §3 調整）→ 輸出 stats JSON
+     → ⑤ 明細：使用者點開成就時，用 ①～③ 的結果即時計算
+```
+
+| 檔案 | 內容 |
+|---|---|
+| `js/core/geo.js` | TopoJSON 解碼、`PolygonIndex`（點在哪個面內）、`PointIndex`（半徑查詢）、距離、`toGeoJSON` |
+| `js/core/compute.js` | `prepareStatic()`（建索引一次）、`compute(records, S, {mode, now})` → `{stats, ctx}`、`detail(ctx, id)` |
+| `js/core/data.js` | 載入 `data/`（以 `version.json` 的雜湊當快取參數） |
+| `js/worker/compute.worker.js` | module worker：`init`／`compute`／`detail` 訊息 |
+| `js/core/client.js` | 主執行緒端 `FogClient`（Promise 包裝；`compute` 會轉移陣列給 Worker） |
+| `dev/compare.html` | 開發用比對頁：以原專案照片跑計算，和原專案 API 輸出逐項比對 |
+
+- 空間索引用自寫的格子索引，**不需要 flatbush、kdbush**（少兩個外部套件，Worker 內也不必載 CDN）。
+- 台灣範圍外的點在第 ① 步之前就排除（經度 114–124.7、緯度 10–26.5），國外照片不參與任何計算。
+- 統計輸出與原專案 `type=stats`、`type=detail` 同格式，去掉照片數；`stats.mode` 標示模式。明細小地圖的範圍外框 `geo.shape` 是 GeoJSON（來自 `shapes.topo.json`，第一次開明細時才載入）。
+
+### 第 2 階段驗證結果（`dev/compare.html`，照片模式）
+
+以原專案 27,559 張照片計算，和原專案 `explore_stats.php` 逐項比對：
+
+| 項目 | 一致 |
+|---|---|
+| 集點卡格子（縣市制霸、百岳、小百岳、鐵道） | 769 / 769 |
+| 成就（進度、目標、達成、日期、分類、等級） | 248 / 258 |
+| 成就明細（每一列內容，不含照片數欄） | 232 / 234 |
+| 已解鎖村里／鄉鎮／縣市 | 1,268 / 1,285、361 / 368、18 / 22 |
+
+差異全部來自**落在界線上的照片**，不是計算邏輯：
+- 村里：41 張照片在村里界線 1.4 m 以內（其中約一半 PostGIS 本身就同時判給兩個村里），造成 17 個村里不同，連帶影響「村里 N」里程碑的計數（1,285 → 1,287）、年度探險家、老地方的張數（2,075 → 2,076）。
+- 保護區：FR04、WIH34 各有 1～2 張照片在界線 1 m 以內（保護區簡化容許值因此由 5 m 改為 1 m，`areas.topo.json` 變為 541 KB／gzip 162 KB）。
+
+效能（內建瀏覽器）：載入與建索引 0.5 秒；27,559 筆計算 0.6 秒（第二次 0.08 秒）；隨機 50 萬筆 2.5 秒；明細 0.15 秒。造訪模式不出現「老地方」。
+- ① 的結果以「座標四捨五入到 1e-5 度」為鍵快取，同一地點的大量紀錄只判定一次。
+- 輸出格式盡量和原專案 `type=stats`、`type=detail` 相同，讓成就頁 UI（改寫自 `explore.js`）只要把 `fetch` 換成呼叫 Worker 即可。
+- 鄉鎮由村里推得：原專案的 towncode 來自鄉鎮界線，和村里界線可能有極少數邊緣差異，靜態版統一以村里為準。
+
+### 效能目標
+
+| 規模 | 目標 |
+|---|---|
+| 照片 10 萬張 | EXIF 讀取依硬碟速度；判定與彙總 < 3 秒 |
+| 時間軸 Records.json 200 萬點 | 解析與去除重複 < 30 秒，過程有進度條 |
+| 再次開啟頁面 | 讀 IndexedDB 快取，< 1 秒顯示 |
+
+---
+
+## 7. 靜態資料（`data/`）✅ 第 1 階段完成（2026-11-20）
+
+由維護者用 `tools/export_static.php` 產生（PHP CLI；讀本機 PostGIS `photo_monitor` 資料庫，只下 SELECT，連線設為唯讀），commit 進 repo。
+
+**設定檔**：`tools/config/achievements.php`、`peaks.php`、`rail_lines.php` 是 2026-11-20 從原專案複製來的，**之後以這裡為準，和原專案脫鉤**。維持 PHP 格式是為了保留檔內的來源與人工修正註解（JSON 不能寫註解）。
+
+| 檔案 | 內容 | 實際大小（gzip 傳輸） |
+|---|---|---|
+| `version.json` | 資料版本＋各檔雜湊；內容有變才更新版本號，前端看版本決定是否重算 | — |
+| `units.json` | 鄉鎮 368、村里 7,975 的代碼、名稱、面積（縣市由鄉鎮推得） | 375 KB（94 KB） |
+| `map_county.json`／`map_town.json`／`map_village.json` | 迷霧小地圖 SVG 路徑（與原專案相同） | 34／210／1,343 KB（8／40／238 KB） |
+| `villages.topo.json` | 村里界線，判定用；**不簡化，只量化到 1e-5 度（約 1.1 m）** | 4,552 KB（1,497 KB） |
+| `areas.topo.json` | 國家公園與保護區 48 個範圍（已排除重複 12、手動略過 2），簡化容許值約 1 m | 541 KB（162 KB） |
+| `shapes.topo.json` | 明細小地圖用的範圍外框 73 個（以村里或保護區判定的地點；聯集後依大小簡化，村里聯集只留外環以去掉細縫） | 205 KB（72 KB），延遲載入 |
+| `achievements.json` | 里程碑、旅行門檻、地點類成就 172 個；town／village 定義**已展開成村里代碼清單** | 35 KB（6 KB） |
+| `peaks.json` | 百岳、小百岳各 100 座 | 9 KB（4 KB） |
+| `rail.json` | 車站 548（含多點的全部點位）、卡片 25、路線制霸 31；卡片已組好 | 93 KB（16 KB） |
+
+合計 gzip 後約 2 MB；`map_village.json`、`villages.topo.json`、`areas.topo.json` 用到時才載入。
+
+- **TopoJSON**：相鄰面的共同界線只存一次，座標量化成整數差值；前端用 `topojson-client` 轉回 GeoJSON，或直接解碼弧做判定。編碼器是自寫的 `tools/topojson.php`，匯出時會把每個環解碼回來和量化座標逐點比對（驗證通過才算數）。
+- **gzip**：GitHub Pages 傳輸時自動壓縮，瀏覽器自動解壓，不必另外處理。
+- 村里界線的頂點本來就稀疏（相鄰頂點距離中位數約 100 m），試過 PostGIS `ST_CoverageSimplify`（1 m）幾乎沒有減少點數，所以不簡化。
+- 文字差異：判定條件由「拍照」改成「有足跡」（例如「範圍內有足跡」「車站 250 公尺內有足跡」），因為資料來源不只照片。
+
+### 第 1 階段驗證結果
+
+- **村里判定精度**：用 `villages.topo.json` 判定原專案全部 27,559 張有座標的照片，和資料庫的 villcode（原始界線 ST_Intersects）比對：**27,518 張一致（99.85%）**。41 張不一致全在界線上：約一半 PostGIS 本身就同時判給兩個村里（點正好在共用界線上，原專案只是取了其中一個），其餘離界線 1.4 公尺以內（量化誤差）。
+- **成就清單**：地點、登山、鐵道共 230 個成就，和原專案 `explore_stats.php?type=stats` 的 id、名稱、分類、分區、等級、目標數**全部一致**；鐵道 25 張卡的格子順序、站級、路線與路線色也全部一致。
+- 鄉鎮由村里代碼前 8 碼推得：資料庫中村里代碼前 8 碼與 towncode 全部一致，照片的 towncode 與 villcode 也全部一致。
+
+### 更新流程
+
+1. 本機更新 PostGIS（或修改 `tools/config/*.php`）
+2. `C:/xampp/php/php.exe tools/export_static.php`（約 5 秒；可只匯出部分項目，例如 `… export_static.php rail`）
+3. 看輸出的警告（找不到的村里代碼、沒歸入路線的車站、驗證失敗等）
+4. commit、push（`version.json` 會自動更新）
+
+連線設定：`tools/lib.php` 讀 `.env` 的 `PG_*`，預設是原專案的 `.env`，可用環境變數 `FOG_ENV` 指定其他檔案。帳密不進本 repo。
+
+### 授權標示（頁尾與說明頁）
+
+- 村里、鄉鎮、縣市界線：內政部國土測繪中心，政府資料開放授權條款
+- 保護區：內政部國家公園署、林業及自然保育署
+- 車站：交通部（TDX、政府開放資料）；捷運路線色部分取自維基百科
+- 山頂座標、地點座標：Wikidata、OpenStreetMap（ODbL）
+- 地圖圖磚：依選用的供應商標示（見 §10 待決事項）
+
+---
+
+## 8. 頁面結構
+
+```
+┌──────────────┬──────────────────────────────────────────┐
+│ 成就目錄      │ 頂列：🔒本機運算說明｜匯入資料｜模式切換｜🌙主題 │
+│  探索率       ├──────────────────────────────────────────┤
+│  迷霧地圖     │ （尚未匯入）匯入引導：三種來源卡片＋隱私說明      │
+│  每年新解鎖   │ （已匯入）  原成就頁內容                       │
+│  成就         │                                          │
+│   里程碑      │                                          │
+│   制霸        │                                          │
+│   登山        │                                          │
+│   臺鐵・高鐵  │                                          │
+│   …          │                                          │
+└──────────────┴──────────────────────────────────────────┘
+```
+
+✅ 第 3 階段完成（2026-11-20）：
+
+- 頂列（固定）：品牌、🔒 本機運算（點了捲到隱私說明）、計算模式（照片／造訪；有照片才出現）、匯入資料、深淺色切換。
+- 成就目錄：總覽（探索率、迷霧小地圖、每年新解鎖、明細）＋各成就大類的進度（達成數與細條，顏色同分類標題色）；點大類會展開成就區並直接跳到該類（不用平滑捲動：距離常上萬像素，途中版面高度變動會停錯位置）。
+- 窄畫面（≤ 900 px）目錄改成左側抽屜（☰）；≤ 640 px 頂列只留品牌文字、🔒、模式（短標籤「照片／造訪」）、主題按鈕，「匯入資料」移到抽屜頂端。375 px 寬無橫向捲動。
+- 匯入引導（沒有資料時）：隱私說明區塊、三種來源卡片（第 4～6 階段前顯示「開發中」）。網址加 `?dev` 會出現「載入原專案測試資料」按鈕（讀 `test/legacy/photos.json`，test/ 不會部署）。
+- 計算中遮罩（註明在瀏覽器裡計算）；頁尾有隱私聲明與圖資授權。
+- 成就頁（`js/explore.js`）改寫自原專案：資料改由 Worker 提供，拿掉所有照片數；「每年新解鎖」改為**自繪 SVG**（不用 Plotly，省 3 MB）；明細彈窗兩欄時有對應版面；地點類以外的明細不顯示「依數量」排序。
+- 主題：`css/theme.css`（原專案 `--c-*` 變數，去掉 Bootstrap 覆寫）、`js/theme.js`（localStorage `fog-theme`），淺色、深色都截圖確認過。
+- 待做：匯入面板的來源清單（筆數、時間範圍、略過筆數、個別移除）在第 4 階段和轉接器一起做。
+
+---
+
+## 9. 技術選型
+
+- 純 HTML＋原生 ES modules，**沒有建置步驟**（開發機沒有 node）。
+- CDN 套件**固定版本**（實作時再確認版本號）：
+
+| 套件 | 用途 |
+|---|---|
+| exifr | 讀 EXIF |
+| ~~flatbush~~ | 不需要（自寫格子索引） |
+| ~~kdbush~~ | 不需要（自寫格子索引） |
+| topojson-client | TopoJSON 轉 GeoJSON |
+| Leaflet 1.9.4 | 明細小地圖 |
+| ~~Bootstrap 5.1.1~~ | 不需要（成就頁本來就是自訂樣式） |
+| ~~Plotly 1.58.5~~ | 不需要（每年新解鎖改為自繪 SVG） |
+| zip.js | 第二階段，直接讀 Takeout zip |
+
+- 匯出腳本：PHP CLI（`C:/xampp/php/php.exe`，已啟用 `pdo_pgsql`；Python 環境沒有 PostgreSQL 驅動，所以改用 PHP），只對 PostGIS 下 SELECT。
+
+### 目錄結構
+
+```
+photo_fog_static/
+├─ index.html
+├─ css/            theme.css（主題色）、explore.css（成就頁）、app.css（外框、目錄、匯入引導）
+├─ js/
+│  ├─ theme.js     深淺色切換（head 同步載入）
+│  ├─ app.js       啟動、匯入、模式切換、成就目錄
+│  ├─ explore.js   成就頁 UI（改寫自原 explore.js）
+│  ├─ core/        geo.js、compute.js、data.js、client.js
+│  ├─ worker/      compute.worker.js
+│  ├─ store.js     IndexedDB（第 4 階段）
+│  └─ adapters/    exif.js、gphotos.js、gtimeline.js（第 4～6 階段）
+├─ data/           靜態資料（§7）
+├─ dev/            compare.html（計算核心比對，開發用）
+├─ tools/          export_static.php、topojson.php、lib.php、config/、dev/export_legacy_test.php
+├─ test/           個人測試資料（git 忽略）
+└─ docs/           SPEC.md
+```
+
+---
+
+## 10. 實作階段
+
+1. ✅ **靜態資料匯出**：`tools/export_static.php`，產生 §7 全部檔案並驗證（2026-11-20）。
+2. ✅ **計算核心**（2026-11-20）：Worker 的 ①～④。驗收方式：用原專案的照片資料當輸入，輸出和原 `explore_stats.php` 對照（扣掉 §3 的差異），解鎖數、首次日期要一致。
+3. ✅ **成就頁 UI**（2026-11-20）：移植 `explore.js`、目錄側欄、深淺色主題。
+4. **轉接器：EXIF 資料夾**，含進度條與 IndexedDB 快取。
+5. **轉接器：Google 時間軸**，四種格式，加上「包含移動途中」開關與模式切換。
+6. **轉接器：Google 相簿 Takeout**（資料夾版；zip 版之後再做）。
+7. **說明頁、授權標示、部署到 GitHub Pages**。
+
+每個階段都用維護者手上的實際檔案測試。
+
+---
+
+## 11. 待決事項
+
+- [ ] 地圖圖磚供應商：OSM 官方圖磚禁止大量使用；候選有 Carto、Stadia、MapTiler（需要 key），或只用少量明細小地圖、量小可接受
+- [x] 每年新解鎖圖是否保留 Plotly → 改為自繪 SVG
+- [ ] `Records.json` 的停留偵測參數（200 m／10 分鐘）實測後調整
+- [ ] 站名、地名資料的授權確認（TDX 條款）
+- [ ] repo 名稱、網站名稱
+- [ ] 是否提供「匯出／匯入計算結果」功能，方便換電腦
+
+## 12. 沿用的已知限制
+
+- 約 89 個村里名稱罕用字顯示為「?」（原始圖資問題）
+- 國家公園圖資缺東沙環礁與金門，改用座標判定；只有陸域範圍
+- 臺鐵圖資沒有平鎮站；捷運圖資沒有廣慈／奉天宮站
+- 時間軸的停留點座標是 Google 推測的地點位置，不一定是實際所在位置

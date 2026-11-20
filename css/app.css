@@ -1,0 +1,478 @@
+/* 頁面外框：頂列、成就目錄、匯入引導、頁尾、計算中遮罩
+ * 顏色一律用 css/theme.css 的 --c-* 變數 */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+}
+
+button {
+    font: inherit;
+    color: inherit;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+/* ---------- 頂列 ---------- */
+
+.app-head {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 56px;
+    padding: 0 16px;
+    background: var(--c-surface);
+    border-bottom: 1px solid var(--c-border);
+    box-shadow: 0 1px 4px var(--c-shadow);
+}
+
+.app-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    color: var(--c-text-strong);
+    text-decoration: none;
+    font-size: 18px;
+    white-space: nowrap;
+}
+
+.app-brand small {
+    color: var(--c-text-muted);
+    font-size: 13px;
+}
+
+.app-privacy {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    font-size: 13px;
+    color: var(--c-success-strong);
+    background: transparent;
+    border: 1px solid var(--c-success);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.app-privacy:hover {
+    background: var(--c-hover);
+}
+
+.app-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.app-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 14px;
+    font-size: 14px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.app-btn:hover:not(:disabled) {
+    background: var(--c-hover);
+}
+
+.app-btn:disabled {
+    color: var(--c-text-faint);
+    cursor: not-allowed;
+}
+
+.app-btn.primary {
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+}
+
+.app-btn.primary:hover:not(:disabled) {
+    background: var(--c-accent-strong);
+}
+
+.app-iconbtn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 18px;
+    line-height: 1;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.app-iconbtn:hover {
+    background: var(--c-hover);
+}
+
+[data-theme-toggle] .t-dark { display: none; }
+:root[data-theme="dark"] [data-theme-toggle] .t-dark { display: inline; }
+:root[data-theme="dark"] [data-theme-toggle] .t-light { display: none; }
+
+/* 計算模式切換：沿用成就頁的分段按鈕樣式 */
+.app-mode {
+    font-size: 13px;
+}
+
+/* ---------- 主體：目錄＋內容 ---------- */
+
+.app-body {
+    display: flex;
+    align-items: flex-start;
+    min-height: calc(100vh - 56px);
+}
+
+.app-main {
+    flex: 1;
+    min-width: 0;
+    padding: 20px;
+}
+
+.app-toc {
+    position: sticky;
+    top: 56px;
+    flex: 0 0 230px;
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
+    padding: 16px 12px 24px;
+    background: var(--c-sidebar-bg);
+    border-right: 1px solid var(--c-sidebar-border);
+    font-size: 14px;
+}
+
+.app-toc h2 {
+    margin: 4px 8px 8px;
+    font-size: 13px;
+    color: var(--c-text-muted);
+    font-weight: normal;
+    letter-spacing: 0.05em;
+}
+
+.app-toc ul {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+}
+
+.app-toc a {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 8px;
+    padding: 6px 8px;
+    color: var(--c-text);
+    text-decoration: none;
+    border-radius: 6px;
+}
+
+.app-toc a:hover {
+    background: var(--c-link-hover-bg);
+}
+
+.app-toc .n {
+    color: var(--c-text-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* 每一類的進度細條（顏色同成就分類標題，資料色） */
+.app-toc .bar {
+    grid-column: 1 / -1;
+    height: 3px;
+    background: var(--c-surface-3);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.app-toc .bar i {
+    display: block;
+    height: 100%;
+    background: var(--g, var(--c-accent));
+}
+
+.app-toc-backdrop {
+    display: none;
+}
+
+/* 窄畫面：目錄變成左側抽屜 */
+@media (max-width: 900px) {
+    .app-toc {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        bottom: 0;
+        z-index: 1100;
+        width: min(280px, 85vw);
+        max-height: none;
+        transform: translateX(-105%);
+        transition: transform 0.2s ease;
+        box-shadow: 4px 0 16px var(--c-shadow-strong);
+    }
+
+    .app-toc.open {
+        transform: none;
+    }
+
+    .app-toc-backdrop.open {
+        display: block;
+        position: fixed;
+        inset: 56px 0 0 0;
+        z-index: 1050;
+        background: var(--c-backdrop);
+    }
+
+    .app-main {
+        padding: 16px;
+    }
+}
+
+@media (min-width: 901px) {
+    .app-toc-btn {
+        display: none !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .app-head {
+        gap: 8px;
+        padding: 0 10px;
+    }
+
+    .app-brand small,
+    .app-brand-icon,
+    .app-privacy span,
+    .app-mode .long,
+    #importBtn {
+        display: none !important;   /* 匯入資料改由目錄抽屜進入 */
+    }
+
+    .app-actions {
+        gap: 6px;
+    }
+
+    .app-mode button {
+        padding: 4px 10px;
+    }
+
+    /* 窄畫面少一層留白 */
+    .app-main {
+        padding: 10px;
+    }
+
+    #explore {
+        padding: 12px 10px;
+    }
+}
+
+/* 目錄頂端的「匯入資料」（窄畫面頂列放不下時的入口） */
+.app-toc .toc-import {
+    display: block;
+    width: 100%;
+    margin: 0 0 14px;
+    text-align: center;
+}
+
+/* ---------- 匯入引導 ---------- */
+
+.app-landing {
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+.app-hero h1 {
+    margin: 12px 0 8px;
+    font-size: 26px;
+    color: var(--c-text-strong);
+}
+
+.app-hero p {
+    margin: 0 0 20px;
+    color: var(--c-text-muted);
+}
+
+.app-privacy-box {
+    display: flex;
+    gap: 16px;
+    padding: 16px 20px;
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-success);
+    border-left-width: 5px;
+    border-radius: 10px;
+}
+
+.app-privacy-box.flash {
+    animation: app-flash 1.2s ease;
+}
+
+@keyframes app-flash {
+    0%, 60% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-success) 35%, transparent); }
+    100% { box-shadow: none; }
+}
+
+.app-privacy-icon {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.app-privacy-box h2 {
+    margin: 0 0 6px;
+    font-size: 17px;
+    color: var(--c-text-strong);
+}
+
+.app-privacy-box ul {
+    margin: 0;
+    padding-left: 1.2em;
+    color: var(--c-text);
+}
+
+.app-privacy-box li {
+    margin: 2px 0;
+}
+
+.app-sub {
+    margin: 28px 0 12px;
+    font-size: 18px;
+    color: var(--c-text-strong);
+}
+
+.app-sources {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+}
+
+.app-source {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px var(--c-shadow);
+}
+
+.app-source-icon {
+    font-size: 28px;
+}
+
+.app-source h3 {
+    margin: 6px 0;
+    font-size: 16px;
+    color: var(--c-text-strong);
+}
+
+.app-source p {
+    flex: 1;
+    margin: 0 0 12px;
+    font-size: 14px;
+    color: var(--c-text-muted);
+}
+
+.app-source .app-btn {
+    align-self: flex-start;
+}
+
+.app-dev {
+    margin-top: 24px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--c-text-muted);
+    border: 1px dashed var(--c-border-strong);
+    border-radius: 8px;
+}
+
+/* ---------- 成就頁在外框內的調整 ---------- */
+
+#explore {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* 錨點捲動時避開固定的頂列（56px） */
+#privacyBox,
+#ex-overview,
+#ex-mapcard,
+#ex-yearly-card,
+#ex-detail-sec,
+#ex-badges-sec,
+.ex-badge-group {
+    scroll-margin-top: 68px;
+}
+
+/* ---------- 頁尾 ---------- */
+
+.app-foot {
+    padding: 16px 20px 24px;
+    font-size: 12.5px;
+    color: var(--c-text-muted);
+    text-align: center;
+    border-top: 1px solid var(--c-border);
+}
+
+.app-foot p {
+    margin: 4px auto;
+    max-width: 900px;
+}
+
+/* ---------- 計算中 ---------- */
+
+.app-busy {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--c-backdrop);
+}
+
+.app-busy-box {
+    min-width: 260px;
+    padding: 22px 28px;
+    text-align: center;
+    background: var(--c-surface);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px var(--c-shadow-strong);
+}
+
+.app-busy-sub {
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: var(--c-success-strong);
+}
+
+.app-spinner {
+    width: 34px;
+    height: 34px;
+    margin: 0 auto 10px;
+    border: 4px solid var(--c-surface-3);
+    border-top-color: var(--c-accent);
+    border-radius: 50%;
+    animation: app-spin 0.8s linear infinite;
+}
+
+@keyframes app-spin {
+    to { transform: rotate(360deg); }
+}

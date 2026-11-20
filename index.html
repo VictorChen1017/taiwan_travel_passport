@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手搓迷霧</title>
+<meta name="description" content="用自己的照片或 Google 時間軸，在瀏覽器裡計算台灣的足跡與成就。所有計算都在本機完成。">
+
+<!-- Leaflet（成就明細的小地圖；固定版本） -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+<link rel="stylesheet" href="css/theme.css?v=20261120">
+<link rel="stylesheet" href="css/explore.css?v=20261120">
+<link rel="stylesheet" href="css/app.css?v=20261120">
+<!-- 主題在畫面出現前套用，避免先閃白 -->
+<script src="js/theme.js?v=20261120"></script>
+<script type="module" src="js/app.js?v=20261120"></script>
+</head>
+<body>
+
+<header class="app-head">
+    <button type="button" class="app-iconbtn app-toc-btn" id="tocBtn" aria-label="開啟目錄" aria-controls="toc" aria-expanded="false" hidden>☰</button>
+    <a class="app-brand" href="./" aria-label="手搓迷霧首頁"><span class="app-brand-icon">🌫️</span> <b>手搓迷霧</b><small>台灣足跡成就</small></a>
+    <button type="button" class="app-privacy" id="privacyBtn" title="你的資料不會離開這台電腦">🔒 <span>本機運算</span></button>
+    <div class="app-actions">
+        <div class="ex-seg app-mode" id="modeSeg" role="group" aria-label="計算模式" hidden>
+            <button type="button" data-mode="photo" title="只用照片計算（含以張數計算的成就）">照片<span class="long">模式</span></button>
+            <button type="button" data-mode="visit" title="照片與時間軸合併，任一筆紀錄就算造訪">造訪<span class="long">模式</span></button>
+        </div>
+        <button type="button" class="app-btn" id="importBtn" hidden>📂 <span>匯入資料</span></button>
+        <button type="button" class="app-iconbtn" data-theme-toggle title="切換淺色／深色模式" aria-label="切換淺色／深色模式">
+            <span class="t-light">🌙</span><span class="t-dark">☀️</span></button>
+    </div>
+</header>
+
+<div class="app-body">
+    <!-- 成就目錄（有資料後才出現；窄畫面為抽屜） -->
+    <nav class="app-toc" id="toc" aria-label="成就目錄" hidden></nav>
+    <div class="app-toc-backdrop" id="tocBackdrop" hidden></div>
+
+    <main class="app-main" id="main">
+        <!-- 匯入引導（沒有資料時） -->
+        <section class="app-landing" id="landing">
+            <div class="app-hero">
+                <h1>🌫️ 撥開台灣地圖上的迷霧</h1>
+                <p>用你的照片或 Google 時間軸，看看自己走過多少縣市、鄉鎮、村里，解鎖百岳、車站、離島與國家公園成就。</p>
+            </div>
+
+            <div class="app-privacy-box" id="privacyBox">
+                <div class="app-privacy-icon">🔒</div>
+                <div>
+                    <h2>本機運算：你的照片與位置不會離開這台電腦</h2>
+                    <ul>
+                        <li>所有計算都在你的瀏覽器裡完成，<b>不會上傳</b>任何照片、座標或時間。</li>
+                        <li>本網站<b>不使用任何追蹤或分析工具</b>，也沒有後端伺服器。</li>
+                        <li>網站只會下載公開的圖資（村里界線、成就設定）；明細小地圖會向 OpenStreetMap 載入地圖圖磚。</li>
+                        <li>計算結果只存在這個瀏覽器，可以隨時清除。</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h2 class="app-sub">選擇資料來源</h2>
+            <div class="app-sources">
+                <div class="app-source">
+                    <div class="app-source-icon">📁</div>
+                    <h3>照片資料夾</h3>
+                    <p>選一個放照片的資料夾，讀取照片內的拍攝位置與時間（EXIF）。只讀檔頭，不讀整張照片。</p>
+                    <button type="button" class="app-btn" disabled>開發中</button>
+                </div>
+                <div class="app-source">
+                    <div class="app-source-icon">🗺️</div>
+                    <h3>Google 時間軸</h3>
+                    <p>從手機的 Google 地圖匯出時間軸（Timeline.json），或舊版 Google Takeout 的位置記錄。</p>
+                    <button type="button" class="app-btn" disabled>開發中</button>
+                </div>
+                <div class="app-source">
+                    <div class="app-source-icon">🖼️</div>
+                    <h3>Google 相簿 Takeout</h3>
+                    <p>Google Takeout 匯出的相簿資料夾，讀取每張照片旁的 JSON 附檔。</p>
+                    <button type="button" class="app-btn" disabled>開發中</button>
+                </div>
+            </div>
+            <p class="app-dev" id="devBox" hidden>
+                開發用：<button type="button" class="app-btn" id="devLegacy">載入原專案測試資料（test/legacy）</button>
+            </p>
+        </section>
+
+        <!-- 成就頁 -->
+        <section id="explore" hidden></section>
+    </main>
+</div>
+
+<footer class="app-foot">
+    <p>🔒 本機運算，資料不會離開你的電腦；不使用追蹤或分析工具。</p>
+    <p class="app-credits">圖資：村里、鄉鎮、縣市界線（內政部國土測繪中心，政府資料開放授權）；國家公園、保護區（內政部國家公園署、農業部林業及自然保育署）；
+        車站（交通部）；山頂與地點座標（Wikidata、© OpenStreetMap 貢獻者）；地圖圖磚 © OpenStreetMap。</p>
+</footer>
+
+<!-- 計算中 -->
+<div class="app-busy" id="busy" hidden>
+    <div class="app-busy-box" role="status" aria-live="polite">
+        <div class="app-spinner" aria-hidden="true"></div>
+        <div id="busyText">計算中…</div>
+        <div class="app-busy-sub">🔒 在你的瀏覽器裡計算，資料不會上傳</div>
+    </div>
+</div>
+
+</body>
+</html>

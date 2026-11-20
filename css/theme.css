@@ -1,0 +1,192 @@
+/* 主題色（淺色／深色）：複製自原專案 common/theme.css（去掉 Bootstrap 覆寫）
+ *
+ * - 介面色一律用這裡的 --c-* 變數；需要新顏色時 :root 與 :root[data-theme="dark"] 兩處都加
+ * - 資料色（年份色、成就等級、分類標題色、路線色）兩種主題相同，可寫在模組內
+ * - 深色模式：<html data-theme="dark">（由 js/theme.js 設定）
+ * - JS 繪圖用 photoTheme.color('--c-xxx') 取色，並監聽 document 的 themechange 事件重繪
+ */
+
+:root {
+    color-scheme: light;
+
+    /* 版面 */
+    --c-bg: #ffffff;              /* 頁面底色 */
+    --c-surface: #ffffff;         /* 卡片、面板 */
+    --c-surface-2: #f8f9fb;       /* 次要面板、可展開區塊 */
+    --c-surface-3: #eceff3;       /* 輸入框、分段按鈕、晶片底色 */
+    --c-hover: #f1f3f6;           /* 滑鼠移上的底色 */
+    --c-border: #e5e7eb;          /* 一般邊框、分隔線 */
+    --c-border-strong: #d1d5db;   /* 較明顯的邊框（按鈕、輸入框） */
+
+    /* 文字 */
+    --c-text: #1f2937;
+    --c-text-strong: #111827;
+    --c-text-muted: #6b7280;
+    --c-text-faint: #9ca3af;
+
+    /* 強調色（品牌橘） */
+    --c-accent: #ff4d1a;
+    --c-accent-strong: #e03d0c;
+    --c-accent-soft: #fff3ee;     /* 強調色的淡底 */
+    --c-on-accent: #ffffff;       /* 放在強調色、深色塊上的文字 */
+
+    /* 狀態色 */
+    --c-primary: #0078d7;
+    --c-primary-strong: #005ea6;
+    --c-danger: #dc3545;
+    --c-danger-strong: #c82333;
+    --c-danger-soft: #f8d7da;
+    --c-danger-text: #842029;
+    --c-success: #16a34a;
+    --c-success-strong: #15803d;
+    --c-active: #ffcc00;          /* 地圖頁「開啟中」按鈕 */
+    --c-active-border: #ff9900;
+    --c-active-soft: #fff4cc;
+
+    /* 側邊欄 */
+    --c-sidebar-bg: hsl(211, 100%, 93%);
+    --c-sidebar-border: #dee2e6;
+    --c-link: #397a9b;
+    --c-link-hover-bg: #ecfffe;
+
+    /* 疊加層 */
+    --c-shadow: rgba(0, 0, 0, 0.1);
+    --c-shadow-strong: rgba(0, 0, 0, 0.25);
+    --c-backdrop: rgba(15, 23, 42, 0.55);   /* 彈窗背後的遮罩 */
+    --c-tooltip-bg: rgba(31, 41, 55, 0.92);
+    --c-tooltip-text: #ffffff;
+
+    /* 地圖與迷霧 */
+    --c-map-bg: #dde3e8;          /* 地圖、小地圖載入前的底色 */
+    --c-fog: #cdd3da;             /* 迷霧地圖未解鎖區域 */
+    --c-fog-line: #ffffff;        /* 迷霧地圖界線 */
+    --c-badge-off: #cdd3da;       /* 未達成的徽章 */
+    --c-badge-off-ring: #b7bec7;
+    --c-map-trail: #2c3e66;       /* 地圖上較早的足跡點、軌跡線 */
+    --c-hist-off: #d3d9df;        /* 時間軸直方圖：播放範圍外 */
+    --c-hist-range: #8a96a3;      /* 時間軸直方圖：範圍內、目前時段外 */
+    --c-chart-bar: #9A3033;       /* 儀表板柱狀圖 */
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --c-bg: #0f1419;
+    --c-surface: #171d24;
+    --c-surface-2: #1c232b;
+    --c-surface-3: #262f39;
+    --c-hover: #232c36;
+    --c-border: #2c3641;
+    --c-border-strong: #3d4955;
+
+    --c-text: #e5e7eb;
+    --c-text-strong: #f9fafb;
+    --c-text-muted: #9ca3af;
+    --c-text-faint: #6b7280;
+
+    --c-accent: #ff6a3d;
+    --c-accent-strong: #ff4d1a;
+    --c-accent-soft: #3a2119;
+    --c-on-accent: #ffffff;
+
+    --c-primary: #3b9eff;
+    --c-primary-strong: #1f7fd9;
+    --c-danger: #f05261;
+    --c-danger-strong: #dc3545;
+    --c-danger-soft: #3b1d22;
+    --c-danger-text: #fecaca;
+    --c-success: #22c55e;
+    --c-success-strong: #4ade80;
+    --c-active: #d4a800;
+    --c-active-border: #f0b400;
+    --c-active-soft: #3a3214;
+
+    --c-sidebar-bg: #131c26;
+    --c-sidebar-border: #2c3641;
+    --c-link: #7cc4e4;
+    --c-link-hover-bg: #1d2a36;
+
+    --c-shadow: rgba(0, 0, 0, 0.45);
+    --c-shadow-strong: rgba(0, 0, 0, 0.6);
+    --c-backdrop: rgba(0, 0, 0, 0.7);
+    --c-tooltip-bg: rgba(10, 14, 19, 0.95);
+    --c-tooltip-text: #f3f4f6;
+
+    --c-map-bg: #1b2229;
+    --c-fog: #3a4552;
+    --c-fog-line: #171d24;
+    --c-badge-off: #3a4552;
+    --c-badge-off-ring: #4a5663;
+    --c-map-trail: #a5b8dc;
+    --c-hist-off: #2f3944;
+    --c-hist-range: #6b7a8a;
+    --c-chart-bar: #ff6a3d;
+}
+
+/* ---------- 全站基本 ---------- */
+
+html,
+body {
+    background: var(--c-bg);
+    color: var(--c-text);
+}
+
+/* ---------- Leaflet ---------- */
+
+.leaflet-container {
+    background: var(--c-map-bg);
+}
+
+.leaflet-bar a,
+.leaflet-control-layers,
+.leaflet-control-attribution {
+    background-color: var(--c-surface) !important;
+    color: var(--c-text) !important;
+    border-color: var(--c-border) !important;
+}
+
+.leaflet-control-attribution a {
+    color: var(--c-link) !important;
+}
+
+.leaflet-tooltip,
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+    background: var(--c-surface);
+    color: var(--c-text);
+    border-color: var(--c-border);
+}
+
+.leaflet-tooltip-top::before { border-top-color: var(--c-surface); }
+.leaflet-tooltip-bottom::before { border-bottom-color: var(--c-surface); }
+.leaflet-tooltip-left::before { border-left-color: var(--c-surface); }
+.leaflet-tooltip-right::before { border-right-color: var(--c-surface); }
+
+/* 深色模式：OSM 底圖反相成深色地圖（圖磚要加 className: 'tiles-osm'；衛星圖不處理） */
+:root[data-theme="dark"] .tiles-osm {
+    filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88);
+}
+
+/* ---------- 主題切換按鈕（側邊欄） ---------- */
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px auto 0;
+    padding: 6px 14px;
+    font-size: 14px;
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.theme-toggle:hover {
+    background: var(--c-hover);
+}
+
+.theme-toggle .t-dark { display: none; }
+:root[data-theme="dark"] .theme-toggle .t-dark { display: inline; }
+:root[data-theme="dark"] .theme-toggle .t-light { display: none; }
