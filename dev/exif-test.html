@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EXIF 解析測試</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 16px; background: #fff; color: #222; }
+  @media (prefers-color-scheme: dark) { body { background: #18181b; color: #e4e4e7; } }
+  pre { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>EXIF 解析測試（開發用）</h1>
+<p>讀 test/sample.json 列出的樣本照片（test/pics 為指向照片資料夾的暫時捷徑），用 EXIF Worker 解析，JPG 與 Pillow 的結果（test/truth.json）比對。</p>
+<pre id="out">執行中…</pre>
+<script type="module">
+const out = document.getElementById('out');
+const R = window.__exif = {};
+try {
+    const list = await fetch('../test/sample.json').then(r => r.json());
+    const truth = await fetch('../test/truth.json').then(r => r.json());
+    const t0 = performance.now();
+    const files = await Promise.all(list.map(async p => {
+        const b = await fetch('../test/pics/' + p.split('/').map(encodeURIComponent).join('/')).then(r => r.blob());
+        return new File([b], p.split('/').pop());
+    }));
+    const tFetch = performance.now() - t0;
+    const w = new Worker(new URL('../js/worker/exif.worker.js', import.meta.url), { type: 'module' });
+    const t1 = performance.now();
+    const r = await new Promise((res, rej) => { w.onmessage = e => res(e.data); w.onerror = e => rej(e); w.postMessage({ id: 1, files }); });
+    const tParse = performance.now() - t1;
+    const byExt = {};
+    const mism = [];
+    const parse = s => { const m = s && s.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/); return m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000 : NaN; };
+    list.forEach((p, i) => {
+        const ext = p.split('.').pop().toLowerCase();
+        const b = byExt[ext] ||= { n: 0, gps: 0, noGps: 0, fail: 0, time: 0 };
+        b.n++;
+        if (r.status[i] === 0) b.gps++; else if (r.status[i] === 1) b.noGps++; else b.fail++;
+        if (Number.isFinite(r.time[i])) b.time++;
+        const t = truth[p];
+        if (t && t[0] !== 'err') {
+            const okGps = t[0] === null ? r.status[i] !== 0 : (r.status[i] === 0 && Math.abs(t[0] - r.lat[i]) < 1e-7 && Math.abs(t[1] - r.lng[i]) < 1e-7);
+            const tt = parse(t[2]);
+            const okTime = Number.isNaN(tt) ? Number.isNaN(r.time[i]) : tt === r.time[i];
+            if (!okGps || !okTime) mism.push([p, t, [r.lat[i], r.lng[i], r.time[i], r.status[i]]]);
+        }
+    });
+    Object.assign(R, { byExt, mism, tFetch, tParse, n: list.length, done: true });
+    out.textContent = JSON.stringify({ n: list.length, fetchMs: Math.round(tFetch), parseMs: Math.round(tParse), byExt, jpgCompared: Object.keys(truth).length, mismatches: mism.length, sample: mism.slice(0, 5) }, null, 1);
+} catch (e) {
+    R.error = String(e.stack || e);
+    out.textContent = R.error;
+}
+</script>
+</body>
+</html>

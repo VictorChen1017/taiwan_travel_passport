@@ -80,6 +80,36 @@
 - 影片（mp4、mov）第一版不處理。
 - 讀取時顯示進度，並且可以中途取消。
 
+**實作（第 4 階段，2026-11-20）**
+
+| 檔案 | 內容 |
+|---|---|
+| `js/adapters/exif.js` | 取得檔案（`showDirectoryPicker`／`<input webkitdirectory>`／拖曳）、分批交給 Worker、統計略過原因、去除重複 |
+| `js/worker/exif.worker.js` | exifr 7.1.3 完整版（jsDelivr `dist/full.esm.mjs`），同時解析 8 個檔，只挑 GPS 與時間欄位、分段讀取（首段 64 KB） |
+| `js/store.js` | IndexedDB `fog`／`sources`；不能用時改存記憶體 |
+
+- 支援副檔名：jpg、jpeg、jfif、heic、heif、avif、tif、tiff、dng、cr2、nef、nrw、arw、orf、rw2、pef、srw、raf、png。影片與其他檔案只計數，顯示在略過原因裡。
+- 略過的資料夾：名稱以 `.` 或 `@` 開頭（含 Synology 縮圖 `@eaDir`）、`#recycle`、`$RECYCLE.BIN`。
+- 時間：`DateTimeOriginal` → `CreateDate` → `DateTimeDigitized`，字串直接當 UTC 解讀。
+- 去除重複：座標（6 位小數）與時間都相同的照片只算一筆（同一張照片的多份備份）。
+- 來源清單：每個來源顯示有座標筆數、照片張數、台灣範圍內筆數、時間範圍、略過原因（沒有 GPS、重複、無法讀取、影片、其他檔案）、沒有時間的張數；可個別移除或全部清除（都會先確認，只刪瀏覽器裡的匯入結果）。
+- 重新開啟頁面時，從 IndexedDB 讀回來源並自動計算，直接顯示成就頁。
+- 預設模式：只有照片時用照片模式，有時間軸時用造訪模式；使用者自己切過就不再自動改。
+
+**驗證**
+
+- 測試資料夾（9,123 個檔案、21.4 GB：HEIC 5,041、JPG 3,415、MOV 515、JPEG 90、PNG 46、MP4 11、CR2 2）抽樣 332 張：
+  - JPG／JPEG 170 張與 Python Pillow 讀出的 GPS、拍攝時間逐張比對，**全部一致**。
+  - HEIC 150 張中 148 張有座標，拍攝年份全部與所在資料夾相符；座標多在國外（旅行照片），國外照片不參與成就計算。
+  - 解析 332 張（已在記憶體）0.47 秒。
+- 匯入流程（找檔、進度條與剩餘時間、取消、存入 IndexedDB、重新整理後自動還原、移除、清除全部）在內建瀏覽器實測。
+- 開發用：`dev/exif-test.html`（需要在 test/ 建立指向照片資料夾的暫時捷徑 `test/pics` 與樣本清單，測完移除）。
+
+**之後可以加**
+
+- 影片位置：iPhone 的 MOV 在 QuickTime 中繼資料（`com.apple.quicktime.location.ISO6709`、`creationdate` 含時區）有座標，測試資料夾有 515 個，可另寫小解析器。
+- Chrome、Edge 記住資料夾授權後提供「重新掃描」（只讀新增的檔案）。
+
 ### 4.2 Google 相簿 Takeout
 
 - 照片旁的 JSON 附檔：舊版是 `xxx.jpg.json`，新版是 `xxx.jpg.supplemental-metadata.json`（檔名可能被截斷，以「開頭相同」比對）。
@@ -296,7 +326,7 @@ photo_fog_static/
 1. ✅ **靜態資料匯出**：`tools/export_static.php`，產生 §7 全部檔案並驗證（2026-11-20）。
 2. ✅ **計算核心**（2026-11-20）：Worker 的 ①～④。驗收方式：用原專案的照片資料當輸入，輸出和原 `explore_stats.php` 對照（扣掉 §3 的差異），解鎖數、首次日期要一致。
 3. ✅ **成就頁 UI**（2026-11-20）：移植 `explore.js`、目錄側欄、深淺色主題。
-4. **轉接器：EXIF 資料夾**，含進度條與 IndexedDB 快取。
+4. ✅ **轉接器：EXIF 資料夾**，含進度條與 IndexedDB 快取（2026-11-20；待維護者以整個測試資料夾實測）。
 5. **轉接器：Google 時間軸**，四種格式，加上「包含移動途中」開關與模式切換。
 6. **轉接器：Google 相簿 Takeout**（資料夾版；zip 版之後再做）。
 7. **說明頁、授權標示、部署到 GitHub Pages**。
@@ -312,6 +342,7 @@ photo_fog_static/
 - [ ] `Records.json` 的停留偵測參數（200 m／10 分鐘）實測後調整
 - [ ] 站名、地名資料的授權確認（TDX 條款）
 - [ ] repo 名稱、網站名稱
+- [ ] 成就報表匯出（保留功能，討論中，見 §13）
 - [ ] 是否提供「匯出／匯入計算結果」功能，方便換電腦
 
 ## 12. 沿用的已知限制
@@ -320,3 +351,41 @@ photo_fog_static/
 - 國家公園圖資缺東沙環礁與金門，改用座標判定；只有陸域範圍
 - 臺鐵圖資沒有平鎮站；捷運圖資沒有廣慈／奉天宮站
 - 時間軸的停留點座標是 Google 推測的地點位置，不一定是實際所在位置
+
+---
+
+## 13. 成就報表匯出（保留功能，尚未實作）
+
+使用者可以勾選要匯出的成就區塊，產生一份報表。2026-11-20 提出，具體內容討論中。
+
+**可勾選的區塊（草案）**：探索率摘要、迷霧小地圖（縣市／鄉鎮／村里）、每年新解鎖、縣市制霸集點卡、各成就大類（里程碑、登山、鐵道、離島、國家公園……）。
+
+**待討論**
+
+1. 用途與格式：分享用圖片（PNG，適合社群）、可列印的報表（PDF，用瀏覽器列印）、資料檔（CSV／JSON，給自己備份或分析）
+2. 每個區塊的呈現：只放達成的成就，或連未達成的進度一起；集點卡要不要整張格子
+3. 隱私：報表只放彙總結果（解鎖的地名、日期），**不含座標與照片**；是否提供「隱藏日期」「只顯示年份」的選項
+4. 版面：固定淺色（列印、分享較一致），或跟隨目前主題
+5. 實作方式：全部在瀏覽器內產生（SVG 轉 Canvas 輸出 PNG；PDF 用列印樣式），不需要伺服器
+
+---
+
+## 14. GitHub Pages 相容性（2026-11-20 確認）
+
+網站執行時**完全不需要 PHP 或任何後端**：用不會執行 PHP 的純靜態伺服器（Python，模擬 GitHub Pages 的子路徑 `/<repo>/` 與 `Cache-Control: max-age=600`）實測，計算、迷霧小地圖、成就明細與範圍外框、明細小地圖圖磚、EXIF Worker（從 jsDelivr 載入 exifr）、IndexedDB、資料夾選擇都正常。
+
+| 項目 | 狀態 |
+|---|---|
+| 網站檔案 | `index.html`、`css/`、`js/`、`data/` 全是靜態檔，路徑都是相對路徑（放在 `https://<帳號>.github.io/<repo>/` 子路徑可用） |
+| PHP | 只有 `tools/` 的維護工具（在維護者電腦執行），網站不會呼叫；放上 Pages 只會被當成文字檔，內容不含帳密 |
+| 外部資源 | Leaflet 1.9.4（unpkg）、exifr 7.1.3（jsDelivr）、OpenStreetMap 圖磚，皆為 HTTPS、固定版本 |
+| HTTPS | Pages 一律 HTTPS，`showDirectoryPicker`、module Worker 都需要安全環境 |
+| Jekyll | 加了 `.nojekyll`，讓 Pages 直接提供檔案、不經 Jekyll 處理 |
+| 檔案大小 | 最大 `villages.topo.json` 4.6 MB，遠低於 Pages 單檔 100 MB 上限；Pages 會自動 gzip |
+| 開發用 | `dev/` 頁面與網址 `?dev` 需要 `test/`（不會上傳），在 Pages 上無法使用，不影響一般使用者 |
+
+**注意事項**
+
+- **同一個帳號的 Pages 共用來源（origin）**：`<帳號>.github.io` 底下所有專案網站共用同一個 IndexedDB、localStorage。匯入的資料（資料庫 `fog`）理論上可被同帳號的其他 Pages 網站讀到。都是自己的網站所以風險低；若要完全隔離，可改用自訂網域。
+- **快取**：Pages 的快取時間是 10 分鐘。CSS 與入口 JS 帶版本參數（`?v=日期`），但 ES module 互相 import 的檔案沒有，部署更新後最多 10 分鐘內可能拿到新舊混合的檔案；改版時記得更新 `index.html` 的版本參數。
+- **地圖圖磚**：OpenStreetMap 官方圖磚有使用政策（禁止大量使用），使用者多時要換供應商（見 §11 待決事項）。

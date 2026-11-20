@@ -60,13 +60,26 @@
                 </div>
             </div>
 
-            <h2 class="app-sub">選擇資料來源</h2>
+            <!-- 已匯入的資料（有資料時才出現） -->
+            <div class="app-imported" id="imported" hidden>
+                <div class="app-imported-head">
+                    <h2 class="app-sub">已匯入的資料</h2>
+                    <button type="button" class="app-btn primary" id="viewBtn">🏅 查看成就</button>
+                    <button type="button" class="app-btn" id="clearBtn">🗑 清除全部</button>
+                </div>
+                <ul class="app-source-list" id="sourceList"></ul>
+                <p class="app-note">資料存在這個瀏覽器的本機儲存空間（IndexedDB），不會上傳；清除後無法復原，需要重新匯入。</p>
+            </div>
+
+            <h2 class="app-sub" id="sourcesTitle">選擇資料來源</h2>
             <div class="app-sources">
-                <div class="app-source">
+                <div class="app-source app-drop" id="folderCard">
                     <div class="app-source-icon">📁</div>
                     <h3>照片資料夾</h3>
-                    <p>選一個放照片的資料夾，讀取照片內的拍攝位置與時間（EXIF）。只讀檔頭，不讀整張照片。</p>
-                    <button type="button" class="app-btn" disabled>開發中</button>
+                    <p>選一個放照片的資料夾（含子資料夾），讀取照片內的拍攝位置與時間（EXIF）。只讀檔頭，不讀整張照片；也可以把資料夾拖曳到這裡。</p>
+                    <p class="app-source-fmt">支援 JPG、HEIC、PNG、TIFF 與常見 RAW（CR2、NEF、ARW、DNG…）；影片暫不支援。</p>
+                    <button type="button" class="app-btn primary" id="folderBtn">選擇資料夾</button>
+                    <input type="file" id="folderInput" webkitdirectory multiple hidden>
                 </div>
                 <div class="app-source">
                     <div class="app-source-icon">🗺️</div>
@@ -102,7 +115,10 @@
     <div class="app-busy-box" role="status" aria-live="polite">
         <div class="app-spinner" aria-hidden="true"></div>
         <div id="busyText">計算中…</div>
-        <div class="app-busy-sub">🔒 在你的瀏覽器裡計算，資料不會上傳</div>
+        <div class="app-progress" id="busyBar" hidden><i></i></div>
+        <div class="app-busy-detail" id="busyDetail"></div>
+        <div class="app-busy-sub">🔒 在你的瀏覽器裡讀取與計算，資料不會上傳</div>
+        <button type="button" class="app-btn" id="busyCancel" hidden>取消</button>
     </div>
 </div>
 

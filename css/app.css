@@ -476,3 +476,106 @@ button {
 @keyframes app-spin {
     to { transform: rotate(360deg); }
 }
+
+/* ---------- 已匯入的資料 ---------- */
+
+.app-imported {
+    margin-top: 24px;
+}
+
+.app-imported-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.app-imported-head .app-sub {
+    margin: 0 auto 0 0;
+}
+
+.app-source-list {
+    list-style: none;
+    margin: 12px 0 6px;
+    padding: 0;
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+    background: var(--c-surface);
+}
+
+.app-source-list li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 4px 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--c-border);
+}
+
+.app-source-list li:last-child {
+    border-bottom: 0;
+}
+
+.app-source-list .icon {
+    font-size: 24px;
+}
+
+.app-source-list .name {
+    font-weight: bold;
+    color: var(--c-text-strong);
+    word-break: break-all;
+}
+
+.app-source-list .meta {
+    font-size: 13px;
+    color: var(--c-text-muted);
+}
+
+.app-source-list .meta b {
+    color: var(--c-text);
+}
+
+.app-note {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--c-text-muted);
+}
+
+.app-source-fmt {
+    font-size: 12.5px !important;
+    color: var(--c-text-faint) !important;
+}
+
+/* 拖曳資料夾進卡片 */
+.app-drop.dragover {
+    border-color: var(--c-accent);
+    background: var(--c-accent-soft);
+}
+
+/* ---------- 進度 ---------- */
+
+.app-progress {
+    height: 8px;
+    margin: 10px 0 4px;
+    background: var(--c-surface-3);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.app-progress i {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: var(--c-accent);
+    transition: width 0.2s;
+}
+
+.app-busy-detail {
+    font-size: 13px;
+    color: var(--c-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+#busyCancel {
+    margin-top: 12px;
+}
