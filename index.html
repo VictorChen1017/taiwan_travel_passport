@@ -12,17 +12,17 @@
 
 <link rel="stylesheet" href="css/theme.css?v=20261120">
 <link rel="stylesheet" href="css/explore.css?v=20261120c">
-<link rel="stylesheet" href="css/app.css?v=20261120d">
+<link rel="stylesheet" href="css/app.css?v=20261120f">
 <!-- 主題在畫面出現前套用，避免先閃白 -->
 <script src="js/theme.js?v=20261120"></script>
-<script type="module" src="js/app.js?v=20261120e"></script>
+<script type="module" src="js/app.js?v=20261120g"></script>
 </head>
 <body>
 
 <header class="app-head">
     <button type="button" class="app-iconbtn app-toc-btn" id="tocBtn" aria-label="開啟目錄" aria-controls="toc" aria-expanded="false" hidden>☰</button>
     <a class="app-brand" href="./" aria-label="台灣旅遊護照首頁"><span class="app-brand-icon">🛂</span> <b>台灣旅遊護照</b></a>
-    <button type="button" class="app-privacy" id="privacyBtn" title="你的資料不會離開這台電腦">🔒 <span>本機運算</span></button>
+    <button type="button" class="app-privacy" id="privacyBtn" title="你的照片與位置完全掌握在你手中">🔒 <span>本機運算</span></button>
     <div class="app-actions">
         <div class="ex-seg app-mode" id="modeSeg" role="group" aria-label="計算模式" hidden>
             <button type="button" data-mode="photo" title="只用照片計算（含以張數計算的成就）">照片<span class="long">模式</span></button>
@@ -49,7 +49,7 @@
 
             <!-- 本機運算說明：預設收起，只留第一行 -->
             <details class="app-privacy-box" id="privacyBox">
-                <summary><span class="app-privacy-icon">🔒</span><b>本機運算：你的照片與位置不會離開這台電腦</b><span class="app-more">說明</span></summary>
+                <summary><span class="app-privacy-icon">🔒</span><b>本機運算：你的照片與位置完全掌握在你手中</b><span class="app-more">說明</span></summary>
                 <ul>
                     <li>所有計算都在你的瀏覽器裡完成，<b>不會上傳</b>任何照片、座標或時間。</li>
                     <li>本網站<b>不使用任何追蹤或分析工具</b>，也沒有後端伺服器。</li>
@@ -68,6 +68,7 @@
                     <div class="app-source-bar">
                         <label class="app-check"><input type="checkbox" id="selectAll"> 全選</label>
                         <span class="app-source-count" id="sourceCount"></span>
+                        <button type="button" class="app-btn" id="exportBtn" title="把匯入的資料存成 .json 檔，可在其他電腦或手機上匯入">⬇ 匯出備份</button>
                         <button type="button" class="app-btn danger" id="deleteBtn" disabled>🗑 刪除所選</button>
                     </div>
                     <ul class="app-source-list" id="sourceList"></ul>
@@ -122,6 +123,22 @@
                         </ul>
                     </details>
                     <button type="button" class="app-btn" disabled>開發中</button>
+                </div>
+                <div class="app-source app-drop" id="backupCard">
+                    <div class="app-source-icon">📦</div>
+                    <h3>匯入備份</h3>
+                    <p>匯入從本網站匯出的備份檔，換電腦或在手機上接著用。</p>
+                    <details class="app-source-more">
+                        <summary>詳細說明</summary>
+                        <ul>
+                            <li>在原本的電腦：「已匯入的資料」→「⬇ 匯出備份」，得到「台灣旅遊護照備份-日期.json」。</li>
+                            <li>把檔案傳到另一台裝置（例如用 LINE、雲端硬碟、AirDrop 傳給自己），在這裡選取或拖曳進來。</li>
+                            <li>備份檔是一般的 JSON 文字檔，含有你的位置紀錄，請自行保管、不要公開分享。</li>
+                            <li>已經匯入過的同一份資料不會重複加入。</li>
+                        </ul>
+                    </details>
+                    <button type="button" class="app-btn primary" id="backupBtn">選擇備份檔</button>
+                    <input type="file" id="backupInput" accept=".json,application/json" hidden>
                 </div>
             </div>
             <p class="app-dev" id="devBox" hidden>

@@ -582,7 +582,7 @@ button {
     color: var(--c-text-muted);
 }
 
-.app-source-bar .app-btn {
+.app-source-bar #exportBtn {
     margin-left: auto;
 }
 
@@ -714,4 +714,13 @@ button {
     background: var(--c-surface);
     border: 1px solid var(--c-border);
     border-radius: 8px;
+}
+
+/* 窄畫面：工具列可換行 */
+.app-source-bar {
+    flex-wrap: wrap;
+}
+
+.app-source-list .meta .upd {
+    color: var(--c-text-faint);
 }

@@ -8,6 +8,7 @@ import { createExplore } from './explore.js';
 import { listSources, saveSource, removeSource, clearSources, newId } from './store.js';
 import * as exif from './adapters/exif.js';
 import * as gtl from './adapters/gtimeline.js';
+import { exportBackup, parseBackup } from './backup.js';
 
 const PATH_KEY = 'fog-include-path';   // 「包含移動途中」記在 localStorage（只是顯示偏好）
 const readPathPref = () => { try { return localStorage.getItem(PATH_KEY) === '1'; } catch (e) { return false; } };
@@ -74,17 +75,23 @@ function mergedRecords(mode) {
     const srcs = app.sources.filter(s => mode !== 'photo' || PHOTO_TYPES.has(s.type));
     const keep = k => app.includePath || k !== 2;
     let n = 0;
-    for (const s of srcs) for (let i = 0; i < s.records.kind.length; i++) if (keep(s.records.kind[i])) n++;
+    for (const s of srcs) n += s.records.kind.length;
     const lat = new Float64Array(n), lng = new Float64Array(n), time = new Float64Array(n);
-    let o = 0;
+    // 去掉完全相同的紀錄（座標與時間都一樣）：同一張照片在不同來源、同一個資料夾匯入兩份時只算一次
+    const seen = new Set();
+    let o = 0, dup = 0;
     for (const s of srcs) {
         const R = s.records;
         for (let i = 0; i < R.kind.length; i++) {
             if (!keep(R.kind[i])) continue;
+            const key = `${R.lat[i]},${R.lng[i]},${R.time[i]}`;
+            if (seen.has(key)) { dup++; continue; }
+            seen.add(key);
             lat[o] = R.lat[i]; lng[o] = R.lng[i]; time[o] = R.time[i]; o++;
         }
     }
-    return { lat, lng, time };
+    app.lastDup = dup;   // 開發測試用
+    return { lat: lat.slice(0, o), lng: lng.slice(0, o), time: time.slice(0, o) };
 }
 
 /** 有沒有「移動途中」的紀錄（決定要不要顯示開關） */
@@ -122,14 +129,34 @@ async function compute({ show = true } = {}) {
 
 // ---------- 資料來源 ----------
 
+/** 最後修改時間（舊資料沒有 updated 時用加入時間） */
+const updatedOf = s => s.updated || s.added || 0;
+
+/**
+ * 加入新來源。已經有同類型、同名的來源（例如重新掃描同一個資料夾）時，問要不要取代：
+ * 取代就沿用原本的 id 與加入時間（之後的備份才判斷得出新舊），否則另外新增一份
+ */
 async function addSource(src, { persist = true } = {}) {
-    src.id = newId();
-    src.added = Date.now();
-    app.sources.push(src);
+    const now = Date.now();
+    const old = app.sources.find(s => s.type === src.type && s.name === src.name);
+    if (old && confirm(`已經有「${old.name}」（${ymdLocal(updatedOf(old))} 匯入）。\n\n要用這次的結果取代舊的嗎？\n・確定：取代舊的\n・取消：另外新增一份`)) {
+        src.id = old.id;
+        src.added = old.added;
+        src.updated = now;
+        app.sources[app.sources.indexOf(old)] = src;
+    } else {
+        src.id = newId();
+        src.added = now;
+        src.updated = now;
+        app.sources.push(src);
+    }
     if (persist) await saveSource(src);
     renderSources();
     await compute();
 }
+
+/** 毫秒時間 → 本機日期時間（給使用者看的匯入時間） */
+const ymdLocal = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
 /** 照片資料夾：取得檔案清單 → 解析 EXIF → 加入來源 */
 async function importFolder(getItems, name) {
@@ -227,7 +254,7 @@ function renderSources() {
         <li data-id="${esc(s.id)}">
             <input type="checkbox" aria-label="選取「${esc(s.name || '未命名')}」">
             <span class="icon">${SOURCE_ICON[s.type] || '📄'}</span>
-            <div><div class="name">${esc(s.name || '未命名')}</div><div class="meta">${sourceSummary(s)}</div></div>
+            <div><div class="name">${esc(s.name || '未命名')}</div><div class="meta">${sourceSummary(s)}<br><span class="upd">最後更新 ${ymdLocal(updatedOf(s))}</span></div></div>
         </li>`).join('');
     updateSelection();
 }
@@ -243,6 +270,83 @@ function updateSelection() {
     $('sourceCount').textContent = n ? `已選 ${n} / ${boxes.length} 個` : `共 ${boxes.length} 個來源`;
     $('deleteBtn').disabled = !n;
     $('deleteBtn').textContent = n ? `🗑 刪除所選（${n}）` : '🗑 刪除所選';
+    $('exportBtn').textContent = n ? `⬇ 匯出所選（${n}）` : '⬇ 匯出備份';
+}
+
+/** 勾選的來源 id */
+const selectedIds = () => [...$('sourceList').querySelectorAll('li[data-id]')]
+    .filter(li => li.querySelector('input').checked).map(li => li.dataset.id);
+
+// ---------- 備份 ----------
+
+/** 匯出備份：有勾選就匯出勾選的，否則全部。手機（觸控）有系統分享選單時用分享，其他直接下載 */
+async function doExport() {
+    const ids = selectedIds();
+    const pick = ids.length ? app.sources.filter(s => ids.includes(s.id)) : app.sources;
+    if (!pick.length) return;
+    const total = pick.reduce((a, s) => a + s.records.lat.length, 0);
+    if (!confirm(`匯出 ${pick.length} 個來源、共 ${n0(total)} 筆紀錄成備份檔（.json）。\n\n這個檔案含有你的位置紀錄（座標與時間），請自行保管，不要公開分享。`)) return;
+    const { blob, filename, size } = exportBackup(pick, { includePath: app.includePath });
+    const file = new File([blob], filename, { type: 'application/json' });
+    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (touch && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: filename }); return; }
+        catch (e) { if (e.name === 'AbortError') return; /* 分享失敗就改下載 */ }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    app.lastExport = { filename, size };   // 開發測試用
+}
+
+/**
+ * 匯入備份。以來源 id 判斷是不是同一份資料，再比最後修改時間：
+ *   這裡沒有 → 加入；備份比較新 → 問要不要取代；一樣或比較舊 → 略過
+ * （手動紀錄改為逐筆合併，見 docs/SPEC.md §15.3，做手動紀錄時加上）
+ */
+async function importBackup(file) {
+    busy('讀取備份檔…');
+    try {
+        const { sources, settings, exported } = parseBackup(await file.text());
+        busy(null);
+        const added = [], replaced = [], same = [], older = [], declined = [];
+        for (const s of sources) {
+            const cur = app.sources.find(x => x.id === s.id);
+            if (!cur) { app.sources.push(s); added.push(s); continue; }
+            const tb = updatedOf(s), tc = updatedOf(cur);
+            if (tb === tc) { same.push(s); continue; }
+            if (tb < tc) { older.push(s); continue; }
+            if (confirm(`「${cur.name}」在備份裡的版本比較新：\n・備份：${ymdLocal(tb)}\n・這裡：${ymdLocal(tc)}\n\n要用備份取代嗎？`)) {
+                app.sources[app.sources.indexOf(cur)] = s;
+                replaced.push(s);
+            } else declined.push(s);
+        }
+        const changed = [...added, ...replaced];
+        for (const s of changed) await saveSource(s);
+        if (typeof settings.includePath === 'boolean' && changed.some(s => s.type === 'gtimeline')) {
+            app.includePath = settings.includePath;
+            try { localStorage.setItem(PATH_KEY, app.includePath ? '1' : '0'); } catch (e) { /* 只影響這次 */ }
+        }
+        renderSources();
+        const bad = changed.reduce((a, s) => a + (s.restored?.bad || 0), 0);
+        const names = list => list.map(s => `「${s.name}」`).join('、');
+        const msg = [
+            `備份檔${exported ? `（${exported.slice(0, 16).replace('T', ' ')} 匯出）` : ''}：`,
+            added.length ? `・新增 ${added.length} 個：${names(added)}` : '',
+            replaced.length ? `・取代成較新的版本 ${replaced.length} 個：${names(replaced)}` : '',
+            same.length ? `・已經是相同版本，略過 ${same.length} 個：${names(same)}` : '',
+            older.length ? `・這裡的版本比較新，略過 ${older.length} 個：${names(older)}` : '',
+            declined.length ? `・你選擇保留這裡的版本 ${declined.length} 個：${names(declined)}` : '',
+            bad ? `・有 ${n0(bad)} 筆紀錄格式不對，略過` : '',
+        ].filter(Boolean).join('\n');
+        if (changed.length) { await compute(); setTimeout(() => alert(msg), 50); }
+        else alert(msg);
+    } catch (e) {
+        busy(null);
+        alert('無法匯入備份：' + e.message);
+    }
 }
 
 // ---------- 介面 ----------
@@ -370,8 +474,9 @@ function bindUi() {
         $('sourceList').querySelectorAll('input[type="checkbox"]').forEach(b => { b.checked = e.target.checked; });
         updateSelection();
     });
+    $('exportBtn').addEventListener('click', doExport);
     $('deleteBtn').addEventListener('click', async () => {
-        const ids = [...$('sourceList').querySelectorAll('li[data-id]')].filter(li => li.querySelector('input').checked).map(li => li.dataset.id);
+        const ids = selectedIds();
         const pick = app.sources.filter(s => ids.includes(s.id));
         if (!pick.length) return;
         const names = pick.map(s => `・${s.name || '未命名'}`).join('\n');
@@ -429,10 +534,27 @@ function bindUi() {
         importTimeline(files, r.items.length > 1 ? r.name : undefined);
     });
 
+    // 匯入備份：選檔或拖曳
+    $('backupBtn').addEventListener('click', () => $('backupInput').click());
+    $('backupInput').addEventListener('change', e => {
+        const f = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (f) importBackup(f);
+    });
+    const bcard = $('backupCard');
+    bcard.addEventListener('dragover', e => { e.preventDefault(); bcard.classList.add('dragover'); });
+    bcard.addEventListener('dragleave', () => bcard.classList.remove('dragover'));
+    bcard.addEventListener('drop', e => {
+        e.preventDefault();
+        bcard.classList.remove('dragover');
+        const f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) importBackup(f);
+    });
+
     // 開發用：載入原專案的測試資料（不存進 IndexedDB）
     if (new URLSearchParams(location.search).has('dev')) {
         $('devBox').hidden = false;
-        window.__fogDev = { importFolder, importTimeline, addSource, app };   // 開發測試用（自動化測試匯入流程）
+        window.__fogDev = { importFolder, importTimeline, importBackup, addSource, app };   // 開發測試用（自動化測試匯入流程）
         $('devLegacy').addEventListener('click', async () => {
             busy('讀取測試資料…');
             try {
