@@ -19,7 +19,7 @@
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
     color: var(--ex-text);
-    font-size: 14px;
+    font-size: calc(14px * var(--fs, 1));
 }
 
 .ex-loading,
@@ -41,13 +41,13 @@
 
 .ex-title {
     margin: 0;
-    font-size: 18px;
+    font-size: calc(18px * var(--fs, 1));
     font-weight: bold;
 }
 
 .ex-hint {
     margin-left: auto;
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -62,7 +62,7 @@
     min-width: 56px;
     height: 28px;
     padding: 0 12px;
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
     color: var(--ex-muted);
     background: transparent;
     border: none;
@@ -103,7 +103,7 @@
 
 .ex-card-title {
     margin-bottom: 8px;
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
     font-weight: bold;
 }
 
@@ -162,7 +162,7 @@
     right: 8px;
     bottom: 8px;
     padding: 2px 8px;
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-text);
     background: color-mix(in srgb, var(--c-surface) 85%, transparent);
     border-radius: 999px;
@@ -187,16 +187,16 @@
 }
 
 .ex-village-icon {
-    font-size: 44px;
+    font-size: calc(44px * var(--fs, 1));
 }
 
 .ex-village-text {
-    font-size: 18px;
+    font-size: calc(18px * var(--fs, 1));
     font-weight: bold;
 }
 
 .ex-village-sub {
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -249,7 +249,7 @@
     z-index: 2;
     max-width: 200px;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--c-on-accent);
     background: var(--c-tooltip-bg);
     border-radius: 6px;
@@ -261,7 +261,7 @@
     flex-wrap: wrap;
     gap: 6px 14px;
     margin-top: 8px;
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -292,7 +292,7 @@
 
 .ex-donut-svg {
     display: block;
-    width: 170px;
+    width: calc(170px * var(--fs, 1));
     height: 170px;
     margin: 0 auto;
 }
@@ -331,11 +331,11 @@
 }
 
 .ex-progress-sub b {
-    font-size: 18px;
+    font-size: calc(18px * var(--fs, 1));
 }
 
 .ex-progress-sub span {
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -349,11 +349,11 @@
 
 .ex-recent-list li {
     display: grid;
-    grid-template-columns: 82px 1fr auto;
+    grid-template-columns: calc(82px * var(--fs, 1)) 1fr auto;
     gap: 8px;
     align-items: center;
     padding: 5px 0;
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
     border-bottom: 1px solid var(--c-border);
 }
 
@@ -373,7 +373,7 @@
 }
 
 .ex-recent-n {
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-accent-dark);
     font-weight: bold;
 }
@@ -393,7 +393,7 @@
 
 .ex-row {
     display: grid;
-    grid-template-columns: minmax(70px, 110px) minmax(80px, 110px) 1fr auto;
+    grid-template-columns: minmax(calc(70px * var(--fs, 1)), calc(110px * var(--fs, 1))) minmax(calc(80px * var(--fs, 1)), calc(110px * var(--fs, 1))) 1fr auto;
     gap: 10px;
     align-items: center;
     padding: 5px 0;
@@ -413,7 +413,7 @@
 }
 
 .ex-row-date {
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -435,7 +435,7 @@
 }
 
 .ex-bar-text {
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-muted);
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -445,7 +445,7 @@
     display: inline-block;
     margin-left: 4px;
     padding: 0 6px;
-    font-size: 11px;
+    font-size: calc(11px * var(--fs, 1));
     color: var(--c-on-accent);
     background: var(--ex-accent);
     border-radius: 999px;
@@ -465,7 +465,7 @@
 }
 
 .ex-group-head span:not(.ex-tag) {
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -477,7 +477,7 @@
 
 .ex-chip {
     padding: 2px 9px;
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--c-text-faint);
     background: var(--c-surface-3);
     border-radius: 999px;
@@ -495,7 +495,7 @@
 
 .ex-fold summary {
     display: grid;
-    grid-template-columns: 110px 1fr 140px;
+    grid-template-columns: calc(110px * var(--fs, 1)) 1fr calc(140px * var(--fs, 1));
     gap: 10px;
     align-items: center;
     padding: 7px 0;
@@ -566,13 +566,13 @@
 }
 
 .ex-section-title {
-    font-size: 17px;
+    font-size: calc(17px * var(--fs, 1));
     font-weight: bold;
 }
 
 .ex-section-hint {
     margin-left: auto;
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -629,7 +629,7 @@
     }
 
     .ex-ach-ring-text b {
-        font-size: 14px;
+        font-size: calc(14px * var(--fs, 1));
     }
 }
 
@@ -659,7 +659,7 @@
 
 .ex-ach-ring svg {
     flex: none;
-    width: 88px;
+    width: calc(88px * var(--fs, 1));
     height: 88px;
 }
 
@@ -683,17 +683,17 @@
 }
 
 .ex-ach-ring-text b {
-    font-size: 17px;
+    font-size: calc(17px * var(--fs, 1));
     color: var(--ex-text);
 }
 
 .ex-ach-ring-text span {
-    font-size: 15px;
+    font-size: calc(15px * var(--fs, 1));
     color: var(--ex-text);
 }
 
 .ex-ach-ring-text small {
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -726,25 +726,25 @@
 
 /* 明細的字放大一些 */
 .ex-detail .ex-group-head b {
-    font-size: 16px;
+    font-size: calc(16px * var(--fs, 1));
 }
 
 .ex-detail .ex-group-head span:not(.ex-tag) {
-    font-size: 14px;
+    font-size: calc(14px * var(--fs, 1));
 }
 
 .ex-detail .ex-chip {
     padding: 4px 12px;
-    font-size: 14px;
+    font-size: calc(14px * var(--fs, 1));
 }
 
 .ex-detail .ex-row-name {
-    font-size: 15px;
+    font-size: calc(15px * var(--fs, 1));
 }
 
 .ex-detail .ex-row-date,
 .ex-detail .ex-bar-text {
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
 }
 
 /* ---------- 成就徽章 ---------- */
@@ -754,7 +754,7 @@
 }
 
 .ex-badge-count {
-    font-size: 15px;
+    font-size: calc(15px * var(--fs, 1));
     font-weight: bold;
     color: var(--ex-accent-dark);
 }
@@ -769,7 +769,7 @@
     gap: 10px;
     margin-bottom: 12px;
     padding-left: 12px;
-    font-size: 19px;
+    font-size: calc(19px * var(--fs, 1));
     font-weight: bold;
     border-left: 5px solid var(--ex-accent);
 }
@@ -787,7 +787,7 @@
 .ex-badge-group-title.g-travel { border-color: #8b5cf6; }
 
 .ex-badge-group-title span {
-    font-size: 14px;
+    font-size: calc(14px * var(--fs, 1));
     font-weight: normal;
     color: var(--ex-muted);
 }
@@ -804,7 +804,7 @@ summary.ex-badge-group-title::-webkit-details-marker {
 
 summary.ex-badge-group-title::after {
     content: "▾";
-    font-size: 14px;
+    font-size: calc(14px * var(--fs, 1));
     color: var(--ex-muted);
     transition: transform 0.2s;
 }
@@ -820,14 +820,14 @@ summary.ex-badge-group-title::after {
     gap: 8px;
     margin: 16px 0 10px;
     padding-bottom: 4px;
-    font-size: 15px;
+    font-size: calc(15px * var(--fs, 1));
     font-weight: bold;
     color: var(--c-text);
     border-bottom: 1px dashed var(--c-border);
 }
 
 .ex-badge-sub span {
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
     font-weight: normal;
     color: var(--ex-muted);
 }
@@ -842,7 +842,7 @@ summary.ex-badge-group-title::after {
 
 .ex-badge-grid > .ex-badge {
     flex: 0 1 200px;
-    min-width: 170px;
+    min-width: calc(170px * var(--fs, 1));
 }
 
 .ex-badge {
@@ -879,7 +879,7 @@ summary.ex-badge-group-title::after {
 }
 
 .ex-badge-svg {
-    width: 76px;
+    width: calc(76px * var(--fs, 1));
     height: 76px;
     margin-bottom: 6px;
 }
@@ -889,14 +889,14 @@ summary.ex-badge-group-title::after {
 }
 
 .ex-badge-name {
-    font-size: 16px;
+    font-size: calc(16px * var(--fs, 1));
     font-weight: bold;
 }
 
 .ex-tier {
     margin-left: 5px;
     padding: 0 6px;
-    font-size: 11px;
+    font-size: calc(11px * var(--fs, 1));
     font-weight: normal;
     color: var(--c-on-accent);
     border-radius: 4px;
@@ -910,20 +910,20 @@ summary.ex-badge-group-title::after {
 .t-legend { background: #8b5cf6; }
 
 .ex-badge-desc {
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--fs, 1));
     color: var(--ex-muted);
     line-height: 1.5;
 }
 
 .ex-badge-note {
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--fs, 1));
     color: var(--ex-muted);
     line-height: 1.5;
 }
 
 .ex-badge-date {
     margin-top: 4px;
-    font-size: 14px;
+    font-size: calc(14px * var(--fs, 1));
     color: var(--ex-accent-dark);
     font-weight: bold;
 }
@@ -934,7 +934,7 @@ summary.ex-badge-group-title::after {
     gap: 8px;
     width: 100%;
     margin-top: 4px;
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -955,7 +955,7 @@ summary.ex-badge-group-title::after {
 
 .ex-badge-grid.compact > .ex-badge {
     flex: 0 1 150px;
-    min-width: 130px;
+    min-width: calc(130px * var(--fs, 1));
 }
 
 .ex-badge.compact {
@@ -970,16 +970,16 @@ summary.ex-badge-group-title::after {
 }
 
 .ex-badge.compact .ex-badge-name {
-    font-size: 14.5px;
+    font-size: calc(14.5px * var(--fs, 1));
 }
 
 .ex-badge.compact .ex-badge-desc {
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     line-height: 1.4;
 }
 
 .ex-badge.compact .ex-badge-date {
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
 }
 
 /* 可點開明細的卡片 */
@@ -998,7 +998,7 @@ summary.ex-badge-group-title::after {
 
 .ex-badge-more {
     margin-top: 2px;
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--ex-accent-dark);
     opacity: 0.75;
 }
@@ -1032,7 +1032,7 @@ summary.ex-badge-group-title::after {
 
 .ex-stamp-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(calc(92px * var(--fs, 1)), 1fr));
     gap: 8px;
     margin-top: 12px;
 }
@@ -1043,7 +1043,7 @@ summary.ex-badge-group-title::after {
     align-items: center;
     gap: 2px;
     padding: 8px 4px;
-    font-size: 14px;
+    font-size: calc(14px * var(--fs, 1));
     color: var(--c-text-faint);
     background: var(--c-surface-3);
     border: 1px dashed var(--c-border-strong);
@@ -1052,7 +1052,7 @@ summary.ex-badge-group-title::after {
 }
 
 .ex-stamp-cell small {
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
 }
 
 .ex-stamp-cell.on {
@@ -1067,13 +1067,13 @@ summary.ex-badge-group-title::after {
 }
 
 .ex-stamp-peak .ex-stamp-grid {
-    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(calc(76px * var(--fs, 1)), 1fr));
     gap: 6px;
 }
 
 .ex-stamp-peak .ex-stamp-cell {
     padding: 6px 2px;
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
     cursor: inherit;
 }
 
@@ -1110,7 +1110,7 @@ summary.ex-badge-group-title::after {
 
 .ex-grade-legend {
     margin-left: auto;
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     font-weight: normal;
     color: var(--c-text-muted);
 }
@@ -1185,13 +1185,13 @@ body.ex-modal-open {
 }
 
 .ex-modal-title {
-    font-size: 18px;
+    font-size: calc(18px * var(--fs, 1));
     font-weight: bold;
     color: var(--c-text);
 }
 
 .ex-modal-hint {
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
     color: var(--c-text-muted);
 }
 
@@ -1205,7 +1205,7 @@ body.ex-modal-open {
     min-width: 34px;
     height: 32px;
     padding: 0 10px;
-    font-size: 14px;
+    font-size: calc(14px * var(--fs, 1));
     color: var(--c-text);
     background: var(--c-surface);
     border: 1px solid var(--c-border);
@@ -1218,7 +1218,7 @@ body.ex-modal-open {
 }
 
 .ex-modal-tools .ex-modal-x {
-    font-size: 16px;
+    font-size: calc(16px * var(--fs, 1));
 }
 
 .ex-modal-body {
@@ -1285,14 +1285,14 @@ body.ex-modal-open {
 }
 
 .ex-dmodal-desc {
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
 }
 
 .ex-dmodal .ex-dmodal-sort button {
     min-width: 0;
     height: 26px;
     padding: 0 10px;
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
     color: var(--ex-muted);
     background: transparent;
     border: none;
@@ -1308,7 +1308,7 @@ body.ex-modal-open {
 
 .ex-dmodal-note {
     margin-bottom: 8px;
-    font-size: 13px;
+    font-size: calc(13px * var(--fs, 1));
     color: var(--ex-muted);
 }
 
@@ -1340,7 +1340,7 @@ body.ex-modal-open {
     gap: 12px;
     align-items: center;
     padding: 9px 14px;
-    font-size: 14px;
+    font-size: calc(14px * var(--fs, 1));
     color: var(--ex-text);
     border-bottom: 1px solid var(--c-border);
 }
@@ -1353,7 +1353,7 @@ body.ex-modal-open {
     position: sticky;
     top: 0;
     z-index: 1;
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--fs, 1));
     font-weight: bold;
     color: var(--ex-muted);
     background: var(--c-surface-2);
@@ -1406,7 +1406,7 @@ body.ex-modal-open {
 }
 
 .ex-ditems .ex-chip {
-    font-size: 12.5px;
+    font-size: calc(12.5px * var(--fs, 1));
 }
 
 @media (max-width: 600px) {
@@ -1414,7 +1414,7 @@ body.ex-modal-open {
         grid-template-columns: 7.5em 5.5em 1fr;
         gap: 8px;
         padding: 8px 10px;
-        font-size: 13px;
+        font-size: calc(13px * var(--fs, 1));
     }
 }
 
@@ -1438,7 +1438,7 @@ body.ex-modal-open {
 .ex-ychart {
     display: block;
     max-width: 100%;
-    font-size: 11px;
+    font-size: calc(11px * var(--fs, 1));
     font-family: inherit;
 }
 
@@ -1448,7 +1448,7 @@ body.ex-modal-open {
 
 .ex-ychart-legend text {
     fill: var(--c-text);
-    font-size: 12px;
+    font-size: calc(12px * var(--fs, 1));
 }
 
 .ex-ychart-grid {

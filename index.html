@@ -3,25 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>手搓迷霧</title>
-<meta name="description" content="用自己的照片或 Google 時間軸，在瀏覽器裡計算台灣的足跡與成就。所有計算都在本機完成。">
+<title>台灣旅遊護照</title>
+<meta name="description" content="匯入照片或 Google 時間軸，看看你走過台灣的哪些地方、解鎖哪些成就。所有計算都在你的瀏覽器裡完成。">
 
 <!-- Leaflet（成就明細的小地圖；固定版本） -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
 <link rel="stylesheet" href="css/theme.css?v=20261120">
-<link rel="stylesheet" href="css/explore.css?v=20261120">
-<link rel="stylesheet" href="css/app.css?v=20261120">
+<link rel="stylesheet" href="css/explore.css?v=20261120b">
+<link rel="stylesheet" href="css/app.css?v=20261120c">
 <!-- 主題在畫面出現前套用，避免先閃白 -->
 <script src="js/theme.js?v=20261120"></script>
-<script type="module" src="js/app.js?v=20261120"></script>
+<script type="module" src="js/app.js?v=20261120c"></script>
 </head>
 <body>
 
 <header class="app-head">
     <button type="button" class="app-iconbtn app-toc-btn" id="tocBtn" aria-label="開啟目錄" aria-controls="toc" aria-expanded="false" hidden>☰</button>
-    <a class="app-brand" href="./" aria-label="手搓迷霧首頁"><span class="app-brand-icon">🌫️</span> <b>手搓迷霧</b><small>台灣足跡成就</small></a>
+    <a class="app-brand" href="./" aria-label="台灣旅遊護照首頁"><span class="app-brand-icon">🛂</span> <b>台灣旅遊護照</b></a>
     <button type="button" class="app-privacy" id="privacyBtn" title="你的資料不會離開這台電腦">🔒 <span>本機運算</span></button>
     <div class="app-actions">
         <div class="ex-seg app-mode" id="modeSeg" role="group" aria-label="計算模式" hidden>
@@ -40,35 +40,39 @@
     <div class="app-toc-backdrop" id="tocBackdrop" hidden></div>
 
     <main class="app-main" id="main">
-        <!-- 匯入引導（沒有資料時） -->
+        <!-- 匯入引導 -->
         <section class="app-landing" id="landing">
             <div class="app-hero">
-                <h1>🌫️ 撥開台灣地圖上的迷霧</h1>
-                <p>用你的照片或 Google 時間軸，看看自己走過多少縣市、鄉鎮、村里，解鎖百岳、車站、離島與國家公園成就。</p>
+                <h1>🛂 台灣旅遊護照</h1>
+                <p>匯入照片或 Google 時間軸，看看你走過台灣的哪些地方。</p>
             </div>
 
-            <div class="app-privacy-box" id="privacyBox">
-                <div class="app-privacy-icon">🔒</div>
-                <div>
-                    <h2>本機運算：你的照片與位置不會離開這台電腦</h2>
-                    <ul>
-                        <li>所有計算都在你的瀏覽器裡完成，<b>不會上傳</b>任何照片、座標或時間。</li>
-                        <li>本網站<b>不使用任何追蹤或分析工具</b>，也沒有後端伺服器。</li>
-                        <li>網站只會下載公開的圖資（村里界線、成就設定）；明細小地圖會向 OpenStreetMap 載入地圖圖磚。</li>
-                        <li>計算結果只存在這個瀏覽器，可以隨時清除。</li>
-                    </ul>
-                </div>
-            </div>
+            <!-- 本機運算說明：預設收起，只留第一行 -->
+            <details class="app-privacy-box" id="privacyBox">
+                <summary><span class="app-privacy-icon">🔒</span><b>本機運算：你的照片與位置不會離開這台電腦</b><span class="app-more">說明</span></summary>
+                <ul>
+                    <li>所有計算都在你的瀏覽器裡完成，<b>不會上傳</b>任何照片、座標或時間。</li>
+                    <li>本網站<b>不使用任何追蹤或分析工具</b>，也沒有後端伺服器。</li>
+                    <li>網站只會下載公開的圖資（村里界線、成就設定）；明細小地圖會向 OpenStreetMap 載入地圖圖磚。</li>
+                    <li>匯入結果只存在這個瀏覽器，可以隨時刪除。</li>
+                </ul>
+            </details>
 
-            <!-- 已匯入的資料（有資料時才出現） -->
+            <!-- 已匯入的資料（有資料時才出現）：勾選後刪除 -->
             <div class="app-imported" id="imported" hidden>
                 <div class="app-imported-head">
                     <h2 class="app-sub">已匯入的資料</h2>
                     <button type="button" class="app-btn primary" id="viewBtn">🏅 查看成就</button>
-                    <button type="button" class="app-btn" id="clearBtn">🗑 清除全部</button>
                 </div>
-                <ul class="app-source-list" id="sourceList"></ul>
-                <p class="app-note">資料存在這個瀏覽器的本機儲存空間（IndexedDB），不會上傳；清除後無法復原，需要重新匯入。</p>
+                <div class="app-source-table">
+                    <div class="app-source-bar">
+                        <label class="app-check"><input type="checkbox" id="selectAll"> 全選</label>
+                        <span class="app-source-count" id="sourceCount"></span>
+                        <button type="button" class="app-btn danger" id="deleteBtn" disabled>🗑 刪除所選</button>
+                    </div>
+                    <ul class="app-source-list" id="sourceList"></ul>
+                </div>
+                <p class="app-note">資料存在這個瀏覽器的本機儲存空間（IndexedDB），不會上傳；刪除只會移除這裡的匯入結果，不會動到你的照片，刪除後需要重新匯入。</p>
             </div>
 
             <h2 class="app-sub" id="sourcesTitle">選擇資料來源</h2>
@@ -76,21 +80,45 @@
                 <div class="app-source app-drop" id="folderCard">
                     <div class="app-source-icon">📁</div>
                     <h3>照片資料夾</h3>
-                    <p>選一個放照片的資料夾（含子資料夾），讀取照片內的拍攝位置與時間（EXIF）。只讀檔頭，不讀整張照片；也可以把資料夾拖曳到這裡。</p>
-                    <p class="app-source-fmt">支援 JPG、HEIC、PNG、TIFF 與常見 RAW（CR2、NEF、ARW、DNG…）；影片暫不支援。</p>
+                    <p>讀取照片裡的拍攝位置與時間，也可以把資料夾拖曳到這裡。</p>
+                    <details class="app-source-more">
+                        <summary>詳細說明</summary>
+                        <ul>
+                            <li>會讀取所選資料夾與所有子資料夾。</li>
+                            <li>只讀照片檔頭的 EXIF（GPS 座標、拍攝時間），不讀整張照片，也不會上傳。</li>
+                            <li>支援 JPG、HEIC、PNG、TIFF 與常見 RAW（CR2、NEF、ARW、DNG…）；影片暫不支援。</li>
+                            <li>沒有 GPS 的照片會略過；同一張照片的多份備份只算一次。</li>
+                            <li>Chrome、Edge 會跳出資料夾選擇視窗；其他瀏覽器改用檔案選擇器。</li>
+                        </ul>
+                    </details>
                     <button type="button" class="app-btn primary" id="folderBtn">選擇資料夾</button>
                     <input type="file" id="folderInput" webkitdirectory multiple hidden>
                 </div>
                 <div class="app-source">
                     <div class="app-source-icon">🗺️</div>
                     <h3>Google 時間軸</h3>
-                    <p>從手機的 Google 地圖匯出時間軸（Timeline.json），或舊版 Google Takeout 的位置記錄。</p>
+                    <p>匯入 Google 地圖時間軸的位置紀錄。</p>
+                    <details class="app-source-more">
+                        <summary>詳細說明</summary>
+                        <ul>
+                            <li>新版：手機 Google 地圖 → 你的時間軸 → 設定 → 匯出時間軸資料（Timeline.json 或 location-history.json）。</li>
+                            <li>舊版：Google Takeout 匯出的「位置記錄」（Records.json 或每月的語意位置記錄）。</li>
+                            <li>預設只算停留過的地點；可信度太低的停留點不算。</li>
+                        </ul>
+                    </details>
                     <button type="button" class="app-btn" disabled>開發中</button>
                 </div>
                 <div class="app-source">
                     <div class="app-source-icon">🖼️</div>
                     <h3>Google 相簿 Takeout</h3>
-                    <p>Google Takeout 匯出的相簿資料夾，讀取每張照片旁的 JSON 附檔。</p>
+                    <p>匯入 Google Takeout 匯出的相簿。</p>
+                    <details class="app-source-more">
+                        <summary>詳細說明</summary>
+                        <ul>
+                            <li>到 takeout.google.com 只勾選「Google 相簿」匯出，下載後解壓縮。</li>
+                            <li>讀取每張照片旁的 JSON 附檔裡的位置與拍攝時間。</li>
+                        </ul>
+                    </details>
                     <button type="button" class="app-btn" disabled>開發中</button>
                 </div>
             </div>

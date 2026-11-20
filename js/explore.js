@@ -204,8 +204,11 @@ export function createExplore(root, { loadMap, loadDetail }) {
         const cum = vals.map(v => (acc += v));
         const fmtV = v => v.toLocaleString(undefined, { maximumFractionDigits: byArea ? 1 : 0 });
 
-        const W = Math.max(280, box.clientWidth || 600), H = 240;
-        const m = { t: 30, r: 52, b: 28, l: 52 };
+        // 字級倍率（css/app.css 的 --fs，寬螢幕放大）：留白、高度、圖例間距一起放大
+        const fs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs')) || 1;
+        const W = Math.max(280, box.clientWidth || 600), H = Math.round(240 * fs);
+        const m = { t: 30 * fs, r: 52 * fs, b: 28 * fs, l: 52 * fs };
+        const lg = 12 * fs;   // 圖例字級
         const iw = W - m.l - m.r, ih = H - m.t - m.b;
         const nice = v => { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; };
         const yMax = nice(Math.max(...vals)), cMax = nice(cum[cum.length - 1]);
@@ -216,9 +219,9 @@ export function createExplore(root, { loadMap, loadDetail }) {
         const step = Math.ceil(labels.length / Math.max(1, Math.floor(iw / 44)));   // x 軸標籤太擠就隔幾個顯示
         const cFmt = v => v >= 10000 ? (v / 1000).toLocaleString() + 'k' : v.toLocaleString();
         box.innerHTML = `<svg class="ex-ychart" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="每年新解鎖">
-            <g class="ex-ychart-legend" transform="translate(${m.l} 12)">
-                <rect width="12" height="10" y="-8" style="fill:#ff8a5c"/><text x="16">當年新解鎖</text>
-                <line x1="96" x2="114" y1="-3" y2="-3" class="ex-ychart-line"/><text x="118">累積</text>
+            <g class="ex-ychart-legend" transform="translate(${m.l} ${lg + 2})">
+                <rect width="${lg}" height="${lg * 0.8}" y="${-lg * 0.7}" style="fill:#ff8a5c"/><text x="${lg * 1.4}">當年新解鎖</text>
+                <line x1="${lg * 9}" x2="${lg * 10.5}" y1="${-lg * 0.3}" y2="${-lg * 0.3}" class="ex-ychart-line"/><text x="${lg * 10.9}">累積</text>
             </g>
             ${ticks.map(t => `<line x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih - t * ih}" y2="${m.t + ih - t * ih}" class="ex-ychart-grid"/>
                 <text x="${m.l - 6}" y="${m.t + ih - t * ih + 4}" text-anchor="end" class="ex-ychart-tick">${cFmt(+(yMax * t).toFixed(2))}</text>

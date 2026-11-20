@@ -154,7 +154,7 @@ async function importFolder(getItems, name) {
 
 function sourceSummary(s) {
     const st = s.stats || {};
-    const range = st.from ? `${ymd(st.from)} ～ ${ymd(st.to)}` : '時間不明';
+    const range = st.from ? (st.to && st.to !== st.from ? `${ymd(st.from)} ～ ${ymd(st.to)}` : ymd(st.from)) : '時間不明';
     if (s.type === 'exif') {
         const skipped = [
             st.noGps ? `沒有 GPS ${n0(st.noGps)}` : '',
@@ -170,16 +170,31 @@ function sourceSummary(s) {
     return `<b>${n0(s.records.lat.length)}</b> 筆足跡・${range}`;
 }
 
+/** 已匯入的資料：每列一個來源，勾選後按「刪除所選」 */
 function renderSources() {
     const box = $('imported');
     box.hidden = !app.sources.length;
     $('sourcesTitle').textContent = app.sources.length ? '再加入資料來源' : '選擇資料來源';
     $('sourceList').innerHTML = app.sources.map(s => `
-        <li>
+        <li data-id="${esc(s.id)}">
+            <input type="checkbox" aria-label="選取「${esc(s.name || '未命名')}」">
             <span class="icon">${SOURCE_ICON[s.type] || '📄'}</span>
             <div><div class="name">${esc(s.name || '未命名')}</div><div class="meta">${sourceSummary(s)}</div></div>
-            <button type="button" class="app-btn" data-remove="${esc(s.id)}" title="移除這個來源">移除</button>
         </li>`).join('');
+    updateSelection();
+}
+
+/** 依勾選狀態更新：全選框、所選筆數、刪除按鈕、列的底色 */
+function updateSelection() {
+    const boxes = [...$('sourceList').querySelectorAll('input[type="checkbox"]')];
+    const n = boxes.filter(b => b.checked).length;
+    boxes.forEach(b => b.closest('li').classList.toggle('selected', b.checked));
+    const all = $('selectAll');
+    all.checked = n > 0 && n === boxes.length;
+    all.indeterminate = n > 0 && n < boxes.length;
+    $('sourceCount').textContent = n ? `已選 ${n} / ${boxes.length} 個` : `共 ${boxes.length} 個來源`;
+    $('deleteBtn').disabled = !n;
+    $('deleteBtn').textContent = n ? `🗑 刪除所選（${n}）` : '🗑 刪除所選';
 }
 
 // ---------- 介面 ----------
@@ -269,6 +284,7 @@ function bindUi() {
     $('privacyBtn').addEventListener('click', () => {
         if ($('landing').hidden) showLanding();
         const box = $('privacyBox');
+        box.open = true;   // 頂列的 🔒 會展開說明
         box.scrollIntoView({ block: 'start' });
         box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
     });
@@ -286,23 +302,28 @@ function bindUi() {
         if (a.dataset.go === 'badges') $('ex-badges-sec').open = true;
     });
 
-    // 已匯入的來源：移除、清除全部
-    $('sourceList').addEventListener('click', async e => {
-        const id = e.target.closest('[data-remove]')?.dataset.remove;
-        if (!id) return;
-        const s = app.sources.find(x => x.id === id);
-        if (!s || !confirm(`移除「${s.name}」？\n（只會刪除這個瀏覽器裡的匯入結果，不會動到你的照片）`)) return;
-        app.sources = app.sources.filter(x => x.id !== id);
-        await removeSource(id);
+    // 已匯入的來源：點整列切換勾選、全選、刪除所選
+    $('sourceList').addEventListener('click', e => {
+        const li = e.target.closest('li[data-id]');
+        if (!li) return;
+        if (e.target.type !== 'checkbox') { const b = li.querySelector('input'); b.checked = !b.checked; }
+        updateSelection();
+    });
+    $('selectAll').addEventListener('change', e => {
+        $('sourceList').querySelectorAll('input[type="checkbox"]').forEach(b => { b.checked = e.target.checked; });
+        updateSelection();
+    });
+    $('deleteBtn').addEventListener('click', async () => {
+        const ids = [...$('sourceList').querySelectorAll('li[data-id]')].filter(li => li.querySelector('input').checked).map(li => li.dataset.id);
+        const pick = app.sources.filter(s => ids.includes(s.id));
+        if (!pick.length) return;
+        const names = pick.map(s => `・${s.name || '未命名'}`).join('\n');
+        if (!confirm(`刪除以下 ${pick.length} 個匯入的資料？\n${names}\n\n只會刪除這個瀏覽器裡的匯入結果，不會動到你的照片；刪除後需要重新匯入。`)) return;
+        if (pick.length === app.sources.length) await clearSources();
+        else for (const s of pick) await removeSource(s.id);
+        app.sources = app.sources.filter(s => !ids.includes(s.id));
         renderSources();
         if (app.sources.length) await compute({ show: false }); else hideToc();
-    });
-    $('clearBtn').addEventListener('click', async () => {
-        if (!confirm('清除全部匯入的資料？\n（只會刪除這個瀏覽器裡的匯入結果，不會動到你的照片；清除後需要重新匯入）')) return;
-        app.sources = [];
-        await clearSources();
-        renderSources();
-        hideToc();
     });
 
     // 取消匯入
@@ -336,7 +357,7 @@ function bindUi() {
     // 開發用：載入原專案的測試資料（不存進 IndexedDB）
     if (new URLSearchParams(location.search).has('dev')) {
         $('devBox').hidden = false;
-        window.__fogDev = { importFolder, app };   // 開發測試用（自動化測試匯入流程）
+        window.__fogDev = { importFolder, addSource, app };   // 開發測試用（自動化測試匯入流程）
         $('devLegacy').addEventListener('click', async () => {
             busy('讀取測試資料…');
             try {
