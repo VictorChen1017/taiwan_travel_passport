@@ -644,8 +644,13 @@ export function createExplore(root, { loadMap, loadDetail }) {
             const card = COMPACT_GROUPS.has(g) ? a => badgeCard(a, true) : a => badgeCard(a);
             const grids = sections.map(s => {
                 const sc = cards.filter(a => (a.section || '') === s);
-                return `${s ? `<div class="ex-badge-sub">${esc(s)}<span>${sc.filter(a => a.done).length} / ${sc.length}</span></div>` : ''}
-                    <div class="ex-badge-grid${COMPACT_GROUPS.has(g) ? ' compact' : ''}">${sc.map(card).join('')}</div>`;
+                const grid = `<div class="ex-badge-grid${COMPACT_GROUPS.has(g) ? ' compact' : ''}">${sc.map(card).join('')}</div>`;
+                // 鐵道的「路線制霸」預設收起（常看的是下方的車站集點卡），點標題展開
+                if (s === '路線制霸') {
+                    return `<details class="ex-route-fold"><summary class="ex-badge-sub">${esc(s)}<span>${sc.filter(a => a.done).length} / ${sc.length}</span>
+                        <span class="ex-route-hint">展開</span></summary>${grid}</details>`;
+                }
+                return `${s ? `<div class="ex-badge-sub">${esc(s)}<span>${sc.filter(a => a.done).length} / ${sc.length}</span></div>` : ''}${grid}`;
             }).join('');
             return `<details class="ex-badge-group" id="ach-${g}" open>
                 <summary class="ex-badge-group-title g-${g}">${GROUP_LABEL[g]}

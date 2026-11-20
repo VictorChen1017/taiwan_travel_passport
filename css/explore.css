@@ -1473,3 +1473,54 @@ body.ex-modal-open {
 .ex-ychart-col:hover .ex-ychart-hit {
     fill: var(--c-hover);
 }
+
+/* 鐵道「路線制霸」：預設收起的區塊，標題列可點；展開後與下方集點卡留出間距 */
+.ex-route-fold {
+    margin: 12px 0 20px;
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+}
+
+.ex-route-fold > summary.ex-badge-sub {
+    margin: 0;
+    padding: 10px 14px;
+    border-bottom: 0;
+    cursor: pointer;
+    list-style: none;
+}
+
+.ex-route-fold > summary::-webkit-details-marker {
+    display: none;
+}
+
+.ex-route-fold > summary:hover {
+    background: var(--c-hover);
+    border-radius: 10px;
+}
+
+.ex-route-fold > summary .ex-route-hint {
+    margin-left: auto;
+}
+
+.ex-route-fold > summary .ex-route-hint::after {
+    content: " ▾";
+}
+
+.ex-route-fold[open] > summary {
+    border-bottom: 1px dashed var(--c-border);
+    border-radius: 10px 10px 0 0;
+}
+
+.ex-route-fold[open] > summary .ex-route-hint {
+    font-size: 0;   /* 展開後把「展開」換成「收起」 */
+}
+
+.ex-route-fold[open] > summary .ex-route-hint::after {
+    content: "收起 ▴";
+    font-size: calc(13px * var(--fs, 1));
+}
+
+.ex-route-fold > .ex-badge-grid {
+    padding: 12px;
+}
