@@ -34,7 +34,8 @@ export class FogClient {
 
     /** records 的陣列會轉移給 Worker（呼叫後在主執行緒不可再用）；要保留請先複製 */
     compute(records, mode = 'visit', now) {
-        return this.call({ type: 'compute', records, mode, now }, [records.lat.buffer, records.lng.buffer, records.time.buffer]);
+        const transfer = ['lat', 'lng', 'time', 'kind', 'ref'].filter(k => records[k]).map(k => records[k].buffer);
+        return this.call({ type: 'compute', records, mode, now }, transfer);
     }
 
     detail(achievement) { return this.call({ type: 'detail', achievement }); }

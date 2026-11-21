@@ -1,0 +1,276 @@
+/* 成就報表彈窗（js/report.js）：左邊選項、右邊預覽；窄畫面改成上下排列
+   介面色一律用 css/theme.css 的 --c-*；報表圖片本身的顏色在 js/report.js 繪製時讀取 */
+
+.rp-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: var(--c-backdrop);
+}
+
+.rp-modal[hidden] {
+    display: none;
+}
+
+.rp-box {
+    display: flex;
+    flex-direction: column;
+    width: min(1180px, 100%);
+    height: min(900px, 100%);
+    overflow: hidden;
+    color: var(--c-text);
+    background: var(--c-surface);
+    border-radius: 14px;
+    box-shadow: 0 12px 40px var(--c-shadow);
+}
+
+.rp-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--c-border);
+}
+
+.rp-title {
+    font-size: calc(18px * var(--fs, 1));
+    font-weight: bold;
+    color: var(--c-text-strong);
+}
+
+.rp-hint {
+    font-size: calc(13px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.rp-x {
+    margin-left: auto;
+    padding: 2px 8px;
+    font-size: calc(16px * var(--fs, 1));
+    color: var(--c-text-muted);
+    cursor: pointer;
+    background: none;
+    border: none;
+}
+
+.rp-x:hover {
+    color: var(--c-text-strong);
+}
+
+.rp-main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.rp-opts {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: calc(290px * var(--fs, 1));
+    flex-shrink: 0;
+    padding: 16px 18px;
+    overflow-y: auto;
+    font-size: calc(14px * var(--fs, 1));
+    border-right: 1px solid var(--c-border);
+}
+
+.rp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: calc(13px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.rp-field select,
+.rp-field input {
+    padding: 6px 8px;
+    font: inherit;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text);
+    background: var(--c-surface-3);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 6px;
+}
+
+.rp-field select:disabled {
+    opacity: 0.5;
+}
+
+.rp-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.rp-blocks-title {
+    margin-top: 4px;
+    font-weight: bold;
+    color: var(--c-text-strong);
+}
+
+.rp-blocks-title small {
+    margin-left: 6px;
+    font-weight: normal;
+    color: var(--c-text-muted);
+}
+
+.rp-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.rp-blocks li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 6px;
+}
+
+.rp-blocks li:hover {
+    background: var(--c-hover);
+}
+
+.rp-miss {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: auto;
+    font-size: calc(12px * var(--fs, 1));
+    color: var(--c-text-muted);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.rp-miss:has(input:disabled) {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.rp-preview {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    padding: 16px;
+    overflow-y: auto;
+    background: var(--c-surface-2);
+}
+
+.rp-status {
+    margin-bottom: 10px;
+    font-size: calc(13px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.rp-status[hidden] {
+    display: none;
+}
+
+/* 預覽縮小顯示（實際輸出寬 1080 px） */
+.rp-img {
+    display: block;
+    width: 100%;
+    max-width: 640px;
+    height: auto;
+    margin: 0 auto;
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px var(--c-shadow);
+}
+
+.rp-foot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--c-border);
+}
+
+.rp-size {
+    margin-right: auto;
+    font-size: calc(12.5px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.rp-btn {
+    padding: 7px 16px;
+    font: inherit;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text);
+    white-space: nowrap;
+    cursor: pointer;
+    background: var(--c-surface-3);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 8px;
+}
+
+.rp-btn:hover:not(:disabled) {
+    background: var(--c-hover);
+}
+
+.rp-btn.primary {
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+}
+
+.rp-btn.primary:hover:not(:disabled) {
+    background: var(--c-accent-strong);
+}
+
+.rp-btn:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+@media (max-width: 760px) {
+    .rp-modal {
+        padding: 0;
+    }
+
+    .rp-box {
+        height: 100%;
+        border-radius: 0;
+    }
+
+    .rp-main {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .rp-opts {
+        width: auto;
+        overflow: visible;
+        border-right: none;
+        border-bottom: 1px solid var(--c-border);
+    }
+
+    .rp-preview {
+        overflow: visible;
+    }
+
+    .rp-hint {
+        display: none;
+    }
+
+    .rp-foot {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .rp-size {
+        width: 100%;
+    }
+}

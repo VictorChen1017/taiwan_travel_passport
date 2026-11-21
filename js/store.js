@@ -1,7 +1,8 @@
 // 匯入的資料來源存在瀏覽器的 IndexedDB（只在這台電腦、這個瀏覽器；不會上傳）
 //
 // 資料庫 fog、物件庫 sources（keyPath: id）
-// 來源物件：{ id, type: 'exif' | 'gphotos' | 'gtimeline', name, added, stats, records: { lat, lng, time, kind } }
+// 來源物件：{ id, type: 'exif' | 'gphotos' | 'gtimeline' | 'manual', name, added, updated, stats, records: { lat, lng, time, kind } }
+// 手動紀錄（type 'manual'，id 固定 'manual'，只有一個）另有 items：[{ id, target, label, lat, lng, time, area, added }]，records 由 items 產生
 // IndexedDB 不能用（無痕模式、被封鎖）時，所有操作改成只存在記憶體，頁面照常運作
 
 const DB = 'fog', STORE = 'sources', VERSION = 1;

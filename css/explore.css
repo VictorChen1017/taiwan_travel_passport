@@ -1434,6 +1434,113 @@ body.ex-modal-open {
     .ex-dmodal-body.two-col.name-first .ex-drow { grid-template-columns: 1fr 7em; }
 }
 
+/* 手動紀錄：每列右側的按鈕欄（＋ 我去過／🗑 刪除）、加入表單 */
+.ex-dmodal-body.two-col.with-act .ex-drow { grid-template-columns: 9em 1fr 6.5em; }
+.ex-dmodal-body.two-col.name-first.with-act .ex-drow { grid-template-columns: 1fr 8em 6.5em; }
+@media (max-width: 600px) {
+    .ex-dmodal-body.two-col.with-act .ex-drow { grid-template-columns: 7.5em 1fr 6em; }
+    .ex-dmodal-body.two-col.name-first.with-act .ex-drow { grid-template-columns: 1fr 6.5em 6em; }
+}
+
+.ex-drow > span.ex-dact {
+    text-align: right;
+}
+
+.ex-mbtn {
+    padding: 3px 10px;
+    font: inherit;
+    font-size: calc(12.5px * var(--fs, 1));
+    color: var(--c-text);
+    white-space: nowrap;
+    cursor: pointer;
+    background: var(--c-surface-3);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 6px;
+}
+
+.ex-mbtn:hover:not(:disabled) {
+    background: var(--c-hover);
+}
+
+.ex-mbtn:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.ex-mbtn.primary {
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+}
+
+.ex-mbtn.primary:hover:not(:disabled) {
+    background: var(--c-accent-strong);
+}
+
+.ex-madd {
+    padding: 14px;
+    text-align: center;
+}
+
+.ex-madd .ex-mbtn {
+    padding: 7px 16px;
+    font-size: calc(14px * var(--fs, 1));
+}
+
+/* 表單打開時藏起下方的大按鈕 */
+.ex-madd:has(+ .ex-mform) {
+    display: none;
+}
+
+.ex-mform {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 8px 14px 12px;
+    padding: 12px 14px;
+    font-size: calc(13.5px * var(--fs, 1));
+    color: var(--c-text);
+    text-align: left;
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-accent);
+    border-radius: 8px;
+}
+
+.ex-mform-title {
+    font-weight: bold;
+    color: var(--c-text-strong);
+}
+
+.ex-mform input[type="date"] {
+    margin-left: 6px;
+    padding: 3px 6px;
+    font: inherit;
+    color: var(--c-text);
+    background: var(--c-surface-3);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 6px;
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] .ex-mform input[type="date"] {
+    color-scheme: dark;
+}
+
+.ex-mform-hint {
+    font-size: calc(12.5px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.ex-mform-msg {
+    font-size: calc(12.5px * var(--fs, 1));
+    color: var(--c-danger);
+}
+
+.ex-mform-btns {
+    display: flex;
+    gap: 8px;
+}
+
 /* 每年新解鎖（自繪 SVG；長條色是資料色，其餘跟主題） */
 .ex-ychart {
     display: block;

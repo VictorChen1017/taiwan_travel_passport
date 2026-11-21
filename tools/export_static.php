@@ -262,6 +262,17 @@ if ($want('achievements')) {
             $out['desc'] = ($extra ?? $p['name']) . " {$dist($p['radius'])}內有足跡";
         }
         if (!empty($p['four'])) $out['four'] = true;
+        // 代表點（手動紀錄用）：以範圍判定的地點取最大一塊面的 ST_PointOnSurface（保證在面內）
+        if (isset($out['villages']) || isset($out['areas'])) {
+            $src = isset($out['villages'])
+                ? 'SELECT geom FROM villages WHERE villcode IN (' . implode(',', array_map([$pg, 'quote'], $out['villages'])) . ')'
+                : 'SELECT geom FROM protected_areas WHERE code IN (' . implode(',', array_map([$pg, 'quote'], $out['areas'])) . ')';
+            $rep = $pg->query("SELECT ST_Y(p) AS lat, ST_X(p) AS lng FROM (
+                SELECT ST_PointOnSurface(d.geom) AS p FROM (SELECT (ST_Dump(geom)).geom FROM ($src) s) d
+                ORDER BY ST_Area(d.geom) DESC LIMIT 1) r")->fetch();
+            if ($rep) $out['rep'] = [round((float)$rep['lat'], 6), round((float)$rep['lng'], 6)];
+            else warn("{$p['id']}：無法產生代表點");
+        }
         $places[] = $out;
     }
     $counts = array_count_values(array_column($places, 'group'));
@@ -271,7 +282,7 @@ if ($want('achievements')) {
         '_format' => [
             'milestones' => '各層門檻 [數量, 等級]；全制霸一級由前端依實際總數加上',
             'travel' => '旅行成就門檻；regular_photos 只在照片模式使用',
-            'places' => '地點類成就，判定三選一：points+radius（公尺）／villages（村里代碼）／areas（areas.topo.json 的 id）；four＝本島四極',
+            'places' => '地點類成就，判定三選一：points+radius（公尺）／villages（村里代碼）／areas（areas.topo.json 的 id）；four＝本島四極；rep＝以範圍判定者的代表點 [緯度, 經度]（手動紀錄用，ST_PointOnSurface）',
         ],
         'milestones' => $cfg['milestones'],
         'travel' => $cfg['travel'],

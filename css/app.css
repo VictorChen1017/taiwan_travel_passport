@@ -276,8 +276,9 @@ button {
     .app-brand-icon,
     .app-privacy span,
     .app-mode .long,
-    #importBtn {
-        display: none !important;   /* 匯入資料改由目錄抽屜進入 */
+    #importBtn,
+    #reportBtn {
+        display: none !important;   /* 匯入資料、成就報表改由目錄抽屜進入 */
     }
 
     .app-actions {
@@ -303,6 +304,13 @@ button {
     display: block;
     width: 100%;
     margin: 0 0 14px;
+    text-align: center;
+}
+
+.app-toc .toc-report {
+    display: block;
+    width: 100%;
+    margin: -6px 0 14px;
     text-align: center;
 }
 

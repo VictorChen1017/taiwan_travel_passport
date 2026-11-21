@@ -52,7 +52,10 @@ export function prepareStatic(d) {
 // =====================================================================
 
 /**
- * @param R     紀錄 { lat: Float64Array, lng: Float64Array, time: Float64Array（NaN＝不明）}
+ * @param R     紀錄 { lat: Float64Array, lng: Float64Array, time: Float64Array（NaN＝不明），
+ *              kind?: Uint8Array（3 手動紀錄、4 以範圍判定地點的手動紀錄）, ref?: Int32Array（手動紀錄編號，其他 -1）,
+ *              targets?: string[]（手動紀錄編號 → 地點成就 id，kind 4 用）}
+ *              kind 4 的座標只是代表點：不參與村里、半徑、保護區判定，只讓 targets 指定的地點成就解鎖
  * @param S     prepareStatic() 的結果
  * @param opts  { mode: 'photo' | 'visit', now: 未來時間上限（unix 秒，預設 現在 + 14 小時） }
  * @returns     { stats, ctx }：stats 為統計＋成就（格式同原專案 type=stats，去掉照片數）；ctx 供 detail() 使用
@@ -66,11 +69,18 @@ export function compute(R, S, opts = {}) {
 
     // ---------- ① 所屬村里（同一座標只判定一次） ----------
 
+    const K = R.kind || null, REF = R.ref || null;
     const inBounds = new Uint8Array(n);
     const vill = new Int32Array(n).fill(-1);
     const cache = new Map();
     const inside = [];
+    const manualPlace = new Map();   // 地點成就 id → kind 4 的紀錄編號
     for (let i = 0; i < n; i++) {
+        if (K && K[i] === 4) {
+            const tg = R.targets && REF ? R.targets[REF[i]] : null;
+            if (tg) { if (!manualPlace.has(tg)) manualPlace.set(tg, []); manualPlace.get(tg).push(i); }
+            continue;
+        }
         const la = R.lat[i], lo = R.lng[i];
         if (!(la >= BOUNDS.lat0 && la <= BOUNDS.lat1 && lo >= BOUNDS.lng0 && lo <= BOUNDS.lng1)) continue;
         inBounds[i] = 1;
@@ -234,7 +244,7 @@ export function compute(R, S, opts = {}) {
             const s = S.rail.stations[c.s];
             const [cnt, first] = stationStat[c.s];
             const cell = { code: k + 1, name: s.name, done: cnt > 0, date: cnt > 0 ? first : null, progress: cnt > 0 ? 1 : 0, target: 1,
-                           lat: s.lat, lng: s.lng };
+                           lat: s.lat, lng: s.lng, st: c.s };
             for (const key of ['grade', 'tier', 'lines', 'colors']) if (c[key] !== undefined) cell[key] = c[key];
             return cell;
         });
@@ -263,6 +273,14 @@ export function compute(R, S, opts = {}) {
 
     // 地點類：極點、離島、景點、B 級景點、國家公園與保護區
     const placeStat = p => {
+        const [cnt, first] = placeStatGeo(p);
+        const m = manualPlace.get(p.id);
+        if (!m) return [cnt, first];
+        let f = first;
+        for (const i of m) { const t = T(i); if (t !== null) f = minNull(f, t); }
+        return [cnt + m.length, f];
+    };
+    const placeStatGeo = p => {
         if (p.points) return radiusStat(p.points, p.radius);
         let cnt = 0, first = null;
         if (p.villages) {
@@ -362,7 +380,7 @@ export function compute(R, S, opts = {}) {
 
     const stats = { ok: true, mode, generated: Math.floor(Date.now() / 1000), summary, counties, towns, villages, achievements };
     const ctx = { R, S, mode, now, vill, inBounds, pts, T, valid, villN, villFirst, villages, peakCells, railCells, achievements,
-                  villName, topVills };
+                  villName, topVills, K, REF, manualPlace };
     return { stats, ctx };
 }
 
@@ -375,7 +393,7 @@ export function detail(ctx, id) {
     const a = ctx.achievements.find(x => x.id === id);
     if (!a || !a.detail) return { ok: false, error: '這個成就沒有明細' };
     const tr = S.achievements.travel;
-    let rows = [], columns = [], note = null, geo = null;
+    let rows = [], columns = [], note = null, geo = null, addInfo = null;
 
     if (id === 'road_trip' || id === 'multi_town') {
         const isTrip = id === 'road_trip';
@@ -424,24 +442,50 @@ export function detail(ctx, id) {
     } else if (ctx.peakCells[id] || ctx.railCells[id]) {
         const isPeak = !!ctx.peakCells[id];
         const cells = isPeak ? ctx.peakCells[id] : ctx.railCells[id];
+        const verb = isPeak ? '登頂' : '到站';
         columns = isPeak ? ['山名', '首次登頂'] : ['車站', '首次到站'];
+        let done = 0;
         for (const c of cells) {
-            if (!c.done) continue;
             const label = isPeak ? `#${c.code} ${c.name}（${fmtNum(c.ele)} m）` : c.name + (c.grade ? `（${c.grade}站）` : '');
-            rows.push({ date: c.date ?? 0, value: 1, hit: true, cells: [label, c.date ? ymd(c.date) : '時間不明'] });
+            if (!c.done) {
+                // 未到：可以手動加入（座標取山頂或車站的第一個點）
+                const p0 = isPeak ? [c.lat, c.lng] : S.rail.stations[c.st].pts[0];
+                rows.push({ date: -1, value: 0, hit: false, cells: [label, `尚未${verb}`],
+                            add: { target: `${id}#${c.code}`, label: c.name, lat: p0[0], lng: p0[1], area: false } });
+                continue;
+            }
+            done++;
+            // 手動紀錄各列一行（可刪除）；其他紀錄合成一行
+            const at = isPeak ? [[c.lat, c.lng]] : S.rail.stations[c.st].pts;
+            const { manual, other } = splitManual(ctx, at, isPeak ? S.peaks.radius : S.rail.radius);
+            if (other.length || !manual.length) {
+                let f = null;
+                for (const i of other) { const t = T(i); if (t !== null) f = minNull(f, t); }
+                rows.push({ date: f ?? 0, value: 1, hit: true, cells: [label, f ? ymd(f) : '時間不明'] });
+            }
+            for (const i of manual) {
+                const t = T(i);
+                rows.push({ date: t ?? 0, value: 1, hit: true, cells: [label, `✋ ${t ? ymd(t) : '日期不明'}`], manual: ctx.REF[i] });
+            }
         }
-        note = isPeak ? `已登頂 ${rows.length} / ${cells.length} 座；地圖紅點為已登頂、灰點為未登頂`
-                      : `已到站 ${rows.length} / ${cells.length} 站；地圖紅點為已到站、灰點為未到站`;
+        note = isPeak ? `已登頂 ${done} / ${cells.length} 座；地圖紅點為已登頂、灰點為未登頂；未登頂的山可以手動加入`
+                      : `已到站 ${done} / ${cells.length} 站；地圖紅點為已到站、灰點為未到站；未到的車站可以手動加入`;
         geo = { marks: cells.map(c => [c.lat, c.lng, isPeak ? `#${c.code} ${c.name}` : c.name, c.done]) };
     } else {
         // 地點：每次造訪（以天為單位）
         const p = S.achievements.places.find(x => x.id === id);
         const hits = placeRecords(ctx, p);
         columns = ['日期', '時間'];
-        const days = new Map();
+        const days = new Map(), manualDays = new Set();
         let bad = 0;
         for (const i of hits) {
             const t = T(i);
+            if (isManual(ctx, i)) {
+                // 手動紀錄各列一行（可刪除），不併入當天
+                rows.push({ date: t ?? 0, value: 1, hit: true, cells: [t ? ymd(t) : '日期不明', '✋ 手動加入'], manual: ctx.REF[i] });
+                if (t !== null) manualDays.add(Math.floor(t / DAY));
+                continue;
+            }
             if (t === null) { bad++; continue; }
             const d = Math.floor(t / DAY);
             const r = days.get(d);
@@ -451,17 +495,21 @@ export function detail(ctx, id) {
         for (const [d, [t0, t1]] of days) {
             rows.push({ date: t0, value: 1, hit: true, cells: [ymd(d * DAY), t0 === t1 ? hm(t0) : `${hm(t0)} – ${hm(t1)}`] });
         }
-        note = `共造訪 ${rows.length} 天` + (bad ? `；另有 ${bad} 筆紀錄時間不明` : '');
-        // 小地圖：地點本身與在此的紀錄位置（最多 500 筆，新到舊）
-        const recent = hits.slice().sort((x, y) => (R.time[y] || 0) - (R.time[x] || 0)).slice(0, 500);
+        note = `共造訪 ${new Set([...days.keys(), ...manualDays]).size} 天` + (bad ? `；另有 ${bad} 筆紀錄時間不明` : '');
+        // 小地圖：地點本身與在此的紀錄位置（最多 500 筆，新到舊；範圍類手動紀錄的代表點不畫）
+        const recent = hits.filter(i => !(ctx.K && ctx.K[i] === 4))
+            .sort((x, y) => (R.time[y] || 0) - (R.time[x] || 0)).slice(0, 500);
         geo = { photos: recent.map(i => [+R.lat[i].toFixed(5), +R.lng[i].toFixed(5)]) };
         if (p.points) { geo.points = p.points; geo.radius = p.radius; }
         else if (S.shapesTopo) geo.shape = toGeoJSON(S.shapesTopo, 'shapes', p.id);
+        // 手動加入：有座標的用第一個點（kind 3，連帶解鎖所在村里）；以範圍判定的用代表點（kind 4，只算這個地點）
+        const at = p.points ? p.points[0] : p.rep;
+        if (at) addInfo = { target: p.id, label: p.name, lat: at[0], lng: at[1], area: !p.points };
     }
 
     const sort = id === 'regular' ? 'value' : 'date';
     rows.sort((x, y) => y[sort] - x[sort]);
-    return { ok: true, id, name: a.name, desc: a.desc, sort, columns, rows, note, geo };
+    return { ok: true, id, name: a.name, desc: a.desc, sort, columns, rows, note, geo, add: addInfo };
 }
 
 /** 地點範圍內的紀錄編號 */
@@ -483,7 +531,21 @@ function placeRecords(ctx, p) {
             if (hit) out.push(i);
         }
     }
+    for (const i of ctx.manualPlace.get(p.id) || []) out.push(i);
     return out;
+}
+
+const isManual = (ctx, i) => !!ctx.K && (ctx.K[i] === 3 || ctx.K[i] === 4) && !!ctx.REF && ctx.REF[i] >= 0;
+
+/** 一個或多個點半徑內的紀錄，分成手動紀錄與其他 */
+function splitManual(ctx, points, r) {
+    const seen = new Set(), manual = [], other = [];
+    for (const [la, lo] of points) ctx.pts.around(la, lo, r, i => {
+        if (seen.has(i)) return;
+        seen.add(i);
+        (isManual(ctx, i) ? manual : other).push(i);
+    });
+    return { manual, other };
 }
 
 /** 四捨五入到 d 位小數（先取 15 位有效數字，避免 58.0555 這類二進位誤差讓結果偏低；同 PHP round） */

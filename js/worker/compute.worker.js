@@ -2,7 +2,7 @@
 //
 // 訊息（主執行緒 → Worker）：
 //   { id, type: 'init', base }                     載入 data/（base 為 data/ 的網址）
-//   { id, type: 'compute', records, mode, now? }   records：{ lat, lng, time }（Float64Array，time 不明為 NaN；可轉移）
+//   { id, type: 'compute', records, mode, now? }   records：{ lat, lng, time, kind?, ref?, targets? }（見 compute.js；陣列可轉移）
 //   { id, type: 'detail', achievement }            成就明細（用最近一次 compute 的結果）
 // 回覆（Worker → 主執行緒）：
 //   { id, ok: true, result, ms }、{ id, ok: false, error }、進度 { id, progress: { step, done, total } }

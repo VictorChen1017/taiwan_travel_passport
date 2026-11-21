@@ -9,14 +9,15 @@ import { listSources, saveSource, removeSource, clearSources, newId } from './st
 import * as exif from './adapters/exif.js';
 import * as gtl from './adapters/gtimeline.js';
 import { exportBackup, parseBackup } from './backup.js';
+import * as manual from './manual.js';
+import { GROUP_COLOR } from './shared.js';
+import { createReport } from './report.js';
 
 const PATH_KEY = 'fog-include-path';   // 「包含移動途中」記在 localStorage（只是顯示偏好）
 const readPathPref = () => { try { return localStorage.getItem(PATH_KEY) === '1'; } catch (e) { return false; } };
 
 const DATA = new URL('../data/', import.meta.url).href;
-// 分類標題色（資料色，同 css/explore.css 的 .ex-badge-group-title.g-*）
-const GROUP_COLOR = { milestone: '#ff4d1a', conquer: '#e0a526', pole: '#3fa7c2', island: '#14b8a6', landmark: '#ec4899', bspot: '#7c3aed', peak: '#0f766e', rail: '#0284c7', metro: '#d90023', lrt: '#7cbd52', nature: '#16a34a', travel: '#8b5cf6' };
-const SOURCE_ICON = { exif: '📁', gphotos: '🖼️', gtimeline: '🗺️' };
+const SOURCE_ICON = { exif: '📁', gphotos: '🖼️', gtimeline: '🗺️', manual: '✋' };
 const PHOTO_TYPES = new Set(['exif', 'gphotos']);
 
 const $ = id => document.getElementById(id);
@@ -41,6 +42,8 @@ const app = {
 
 const hasPhotos = () => app.sources.some(s => PHOTO_TYPES.has(s.type));
 const hasTimeline = () => app.sources.some(s => s.type === 'gtimeline');
+const manualSource = () => app.sources.find(s => s.type === 'manual') || null;
+const hasManual = () => !!manualSource()?.items.length;
 
 // ---------- 靜態資料與 Worker ----------
 
@@ -66,10 +69,10 @@ function loadMap(level) {
 
 // ---------- 計算 ----------
 
-/** 合併各來源的紀錄；照片模式只用照片來源 */
 /**
- * 合併各來源的紀錄。照片模式只用照片來源；「包含移動途中」關閉時排除 kind 2（時間軸的移動起訖與路徑點）
- * kind：0 照片、1 停留點、2 移動途中、3 手動紀錄
+ * 合併各來源的紀錄。照片模式只用照片來源（手動紀錄只在造訪模式計入）；「包含移動途中」關閉時排除 kind 2
+ * kind：0 照片、1 停留點、2 移動途中、3 手動紀錄、4 以範圍判定地點的手動紀錄
+ * 手動紀錄另外帶 ref（items 的編號）與 targets（編號 → 地點成就 id），明細才知道哪一列是哪一筆
  */
 function mergedRecords(mode) {
     const srcs = app.sources.filter(s => mode !== 'photo' || PHOTO_TYPES.has(s.type));
@@ -77,31 +80,40 @@ function mergedRecords(mode) {
     let n = 0;
     for (const s of srcs) n += s.records.kind.length;
     const lat = new Float64Array(n), lng = new Float64Array(n), time = new Float64Array(n);
+    const kind = new Uint8Array(n), ref = new Int32Array(n).fill(-1);
     // 去掉完全相同的紀錄（座標與時間都一樣）：同一張照片在不同來源、同一個資料夾匯入兩份時只算一次
+    // 手動紀錄不去重複（加入時已擋掉同一地點同一天）
     const seen = new Set();
     let o = 0, dup = 0;
     for (const s of srcs) {
-        const R = s.records;
+        const R = s.records, isManual = s.type === 'manual';
         for (let i = 0; i < R.kind.length; i++) {
             if (!keep(R.kind[i])) continue;
-            const key = `${R.lat[i]},${R.lng[i]},${R.time[i]}`;
-            if (seen.has(key)) { dup++; continue; }
-            seen.add(key);
-            lat[o] = R.lat[i]; lng[o] = R.lng[i]; time[o] = R.time[i]; o++;
+            if (!isManual) {
+                const key = `${R.lat[i]},${R.lng[i]},${R.time[i]}`;
+                if (seen.has(key)) { dup++; continue; }
+                seen.add(key);
+            }
+            lat[o] = R.lat[i]; lng[o] = R.lng[i]; time[o] = R.time[i]; kind[o] = R.kind[i];
+            if (isManual) ref[o] = i;
+            o++;
         }
     }
     app.lastDup = dup;   // 開發測試用
-    return { lat: lat.slice(0, o), lng: lng.slice(0, o), time: time.slice(0, o) };
+    const m = mode !== 'photo' ? manualSource() : null;
+    app.manualSnapshot = m ? m.items.slice() : [];   // 這次計算用的手動紀錄（ref → item）
+    return { lat: lat.slice(0, o), lng: lng.slice(0, o), time: time.slice(0, o), kind: kind.slice(0, o), ref: ref.slice(0, o),
+             targets: app.manualSnapshot.map(it => it.target) };
 }
 
 /** 有沒有「移動途中」的紀錄（決定要不要顯示開關） */
 const hasPathRecords = () => app.sources.some(s => s.type === 'gtimeline' && s.records.kind.some(k => k === 2));
 
-/** 依來源決定預設模式：有時間軸用造訪模式，只有照片用照片模式 */
+/** 依來源決定預設模式：有時間軸或手動紀錄用造訪模式，只有照片用照片模式 */
 function defaultMode() {
     if (!hasPhotos()) return 'visit';
     if (app.modeTouched) return app.mode;
-    return hasTimeline() ? 'visit' : 'photo';
+    return hasTimeline() || hasManual() ? 'visit' : 'photo';
 }
 
 async function compute({ show = true } = {}) {
@@ -113,7 +125,10 @@ async function compute({ show = true } = {}) {
         busy('計算中…');
         const stats = await app.fog.compute(mergedRecords(app.mode), app.mode);
         if (!app.explore) {
-            app.explore = createExplore($('explore'), { loadMap, loadDetail: id => app.fog.detail(id) });
+            app.explore = createExplore($('explore'), {
+                loadMap, loadDetail: id => app.fog.detail(id),
+                manual: { add: addManual, remove: removeManual, item: ref => app.manualSnapshot[ref] || null },
+            });
         }
         app.explore.setData(stats);
         renderModeSeg();
@@ -153,6 +168,43 @@ async function addSource(src, { persist = true } = {}) {
     if (persist) await saveSource(src);
     renderSources();
     await compute();
+}
+
+// ---------- 手動紀錄（js/manual.js） ----------
+
+/**
+ * 手動加入一筆（成就明細彈窗呼叫）。info：{ target, label, lat, lng, area }；date：'YYYY-MM-DD' 或空字串
+ * 照片模式不計入手動紀錄，所以加入時自動切到造訪模式
+ * @returns 錯誤訊息（給使用者看）或 null
+ */
+async function addManual(info, date) {
+    let src = manualSource();
+    const time = manual.dateToTime(date);
+    if (src && manual.findSame(src, info.target, time)) return time ? `「${info.label}」在 ${date} 已經有手動紀錄了` : `「${info.label}」已經有一筆沒有日期的手動紀錄了`;
+    if (!src) { src = manual.emptyManual(); app.sources.push(src); }
+    src.items.push(manual.newItem(info, date));
+    src.updated = Date.now();
+    manual.refresh(src);
+    await saveSource(src);
+    renderSources();
+    let switched = false;
+    if (app.mode === 'photo') { app.mode = 'visit'; app.modeTouched = true; switched = true; }
+    await compute({ show: false });
+    if (switched) setTimeout(() => alert('已切換到「造訪模式」：手動紀錄只在造訪模式計入（照片模式只算照片）。'), 50);
+    return null;
+}
+
+/** 刪除一筆手動紀錄（ref：計算時的編號） */
+async function removeManual(ref) {
+    const src = manualSource(), it = app.manualSnapshot[ref];
+    if (!src || !it) return;
+    src.items = src.items.filter(x => x.id !== it.id);
+    src.updated = Date.now();
+    manual.refresh(src);
+    if (src.items.length) await saveSource(src);
+    else { await removeSource(src.id); app.sources = app.sources.filter(s => s !== src); }
+    renderSources();
+    if (app.sources.length) await compute({ show: false }); else { hideToc(); showLanding(); }
 }
 
 /** 毫秒時間 → 本機日期時間（給使用者看的匯入時間） */
@@ -242,6 +294,11 @@ function sourceSummary(s) {
             `<br>${fmts ? fmts + '・' : ''}${st.files > 1 ? `${n0(st.files)} 個檔案・` : ''}略過：可信度太低的停留點 ${n0(st.lowProb)}、重複的路徑點 ${n0(st.pathDup)}` +
             (s.skipped?.length ? `、看不懂的檔案 ${n0(s.skipped.length)}` : '');
     }
+    if (s.type === 'manual') {
+        const noDate = s.items.filter(it => !Number.isFinite(it.time)).length;
+        return `<b>${n0(s.items.length)}</b> 筆手動加入的地點・${st.from ? range : '都沒有日期'}` +
+            (noDate && st.from ? `（${n0(noDate)} 筆沒有日期）` : '') + '<br>只在造訪模式計入；要刪除單筆請到該成就的明細';
+    }
     return `<b>${n0(s.records.lat.length)}</b> 筆足跡・${range}`;
 }
 
@@ -304,7 +361,7 @@ async function doExport() {
 /**
  * 匯入備份。以來源 id 判斷是不是同一份資料，再比最後修改時間：
  *   這裡沒有 → 加入；備份比較新 → 問要不要取代；一樣或比較舊 → 略過
- * （手動紀錄改為逐筆合併，見 docs/SPEC.md §15.3，做手動紀錄時加上）
+ * 手動紀錄例外：逐筆合併（docs/SPEC.md §15.2）
  */
 async function importBackup(file) {
     busy('讀取備份檔…');
@@ -312,7 +369,15 @@ async function importBackup(file) {
         const { sources, settings, exported } = parseBackup(await file.text());
         busy(null);
         const added = [], replaced = [], same = [], older = [], declined = [];
+        let manualAdded = 0, manualSrc = null;
         for (const s of sources) {
+            // 手動紀錄：逐筆合併（以每筆的編號判斷；兩邊各自新增的都保留）
+            if (s.type === 'manual') {
+                const cur = manualSource();
+                if (!cur) { s.id = manual.MANUAL_ID; manual.refresh(s); app.sources.push(s); manualSrc = s; manualAdded += s.items.length; }
+                else { const k = manual.mergeItems(cur, s.items || []); if (k) { manualSrc = cur; manualAdded += k; } }
+                continue;
+            }
             const cur = app.sources.find(x => x.id === s.id);
             if (!cur) { app.sources.push(s); added.push(s); continue; }
             const tb = updatedOf(s), tc = updatedOf(cur);
@@ -325,6 +390,8 @@ async function importBackup(file) {
         }
         const changed = [...added, ...replaced];
         for (const s of changed) await saveSource(s);
+        if (manualSrc) { await saveSource(manualSrc); changed.push(manualSrc); }
+        const hadManual = sources.some(s => s.type === 'manual');
         if (typeof settings.includePath === 'boolean' && changed.some(s => s.type === 'gtimeline')) {
             app.includePath = settings.includePath;
             try { localStorage.setItem(PATH_KEY, app.includePath ? '1' : '0'); } catch (e) { /* 只影響這次 */ }
@@ -339,6 +406,7 @@ async function importBackup(file) {
             same.length ? `・已經是相同版本，略過 ${same.length} 個：${names(same)}` : '',
             older.length ? `・這裡的版本比較新，略過 ${older.length} 個：${names(older)}` : '',
             declined.length ? `・你選擇保留這裡的版本 ${declined.length} 個：${names(declined)}` : '',
+            hadManual ? (manualAdded ? `・手動紀錄合併進 ${n0(manualAdded)} 筆` : '・手動紀錄都已經有了，沒有新增') : '',
             bad ? `・有 ${n0(bad)} 筆紀錄格式不對，略過` : '',
         ].filter(Boolean).join('\n');
         if (changed.length) { await compute(); setTimeout(() => alert(msg), 50); }
@@ -374,7 +442,25 @@ function showExplore() {
     $('landing').hidden = true;
     $('explore').hidden = false;
     $('importBtn').hidden = false;
+    $('reportBtn').hidden = false;
     if (fromLanding) window.scrollTo(0, 0);
+}
+
+// ---------- 成就報表（js/report.js） ----------
+
+/** 報表標題列用：目前模式用到的來源的時間範圍、手動紀錄筆數 */
+function reportMeta() {
+    const srcs = app.sources.filter(s => app.mode !== 'photo' || PHOTO_TYPES.has(s.type));
+    const from = srcs.map(s => s.stats?.from).filter(Number.isFinite);
+    const to = srcs.map(s => s.stats?.to).filter(Number.isFinite);
+    const m = app.mode !== 'photo' ? manualSource() : null;
+    return { from: from.length ? Math.min(...from) : null, to: to.length ? Math.max(...to) : null, mode: app.mode, manual: m ? m.items.length : 0 };
+}
+
+function openReport() {
+    if (!app.explore || !app.explore.data()) return;
+    if (!app.report) app.report = createReport({ getStats: () => app.explore.data(), loadMap, getMeta: reportMeta });
+    app.report.open();
 }
 
 function renderModeSeg() {
@@ -389,6 +475,7 @@ function renderToc() {
     const groups = app.explore.groups();
     toc.innerHTML = `
         <button type="button" class="app-btn toc-import" data-act="import">📂 匯入資料</button>
+        <button type="button" class="app-btn toc-report" data-act="report">🖼 成就報表</button>
         ${hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path" title="時間軸裡移動時經過的點（例如坐車經過的鄉鎮）也算解鎖">
             <input type="checkbox" id="pathToggle"${app.includePath ? ' checked' : ''}> 包含移動途中</label>` : ''}
         <h2>總覽</h2>
@@ -414,6 +501,7 @@ function hideToc() {
     $('tocBtn').hidden = true;
     $('modeSeg').hidden = true;
     $('importBtn').hidden = true;
+    $('reportBtn').hidden = true;
 }
 
 function openToc(open) {
@@ -433,6 +521,7 @@ function bindUi() {
     });
 
     $('importBtn').addEventListener('click', showLanding);
+    $('reportBtn').addEventListener('click', openReport);
     $('viewBtn').addEventListener('click', () => compute());
 
     $('privacyBtn').addEventListener('click', () => {
@@ -454,6 +543,7 @@ function bindUi() {
     $('toc').addEventListener('click', e => {
         if (e.target.closest('.toc-path')) return;
         if (e.target.closest('[data-act="import"]')) { openToc(false); showLanding(); return; }
+        if (e.target.closest('[data-act="report"]')) { openToc(false); openReport(); return; }
         const a = e.target.closest('a');
         if (!a) return;
         openToc(false);

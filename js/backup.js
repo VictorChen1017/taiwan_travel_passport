@@ -21,12 +21,15 @@
 //   ]
 // }
 // time：當地時鐘時間當成 UTC 的 unix 秒（docs/SPEC.md §5），不明為 null
-// kind：0 照片、1 停留點、2 移動途中、3 手動紀錄
+// kind：0 照片、1 停留點、2 移動途中、3 手動紀錄、4 以範圍判定地點的手動紀錄（座標為代表點）
+// 手動紀錄（type "manual"）的每一行多四個欄位：[緯度, 經度, 時間, 類型, 編號, 對象, 名稱, 加入時間]，匯入時以編號逐筆合併
 // 座標原樣保存（不四捨五入），來回匯出匯入後計算結果完全相同
 
 export const FORMAT = 'taiwan-travel-passport-backup';
 export const VERSION = 1;
 const TYPES = new Set(['exif', 'gphotos', 'gtimeline', 'manual']);
+const FIELDS = ['lat', 'lng', 'time', 'kind'];
+const MANUAL_FIELDS = [...FIELDS, 'id', 'target', 'label', 'added'];
 const pad = n => String(n).padStart(2, '0');
 
 /** 本地時間的 ISO 字串（含時區），只用在檔頭與檔名 */
@@ -58,12 +61,16 @@ export function exportBackup(sources, settings = {}) {
         const head = { id: s.id, type: s.type, name: s.name, added: s.added, updated: s.updated || s.added, stats: s.stats || {} };
         if (s.formats) head.formats = s.formats;
         const headJson = JSON.stringify(head);
-        parts.push(`    ${headJson.slice(0, -1)},\n      "fields": ["lat", "lng", "time", "kind"],\n      "records": [\n`);
+        const manual = s.type === 'manual' && Array.isArray(s.items);
+        parts.push(`    ${headJson.slice(0, -1)},\n      "fields": ${JSON.stringify(manual ? MANUAL_FIELDS : FIELDS)},\n      "records": [\n`);
         const R = s.records, n = R.lat.length;
         const lines = new Array(n);
         for (let i = 0; i < n; i++) {
             const t = R.time[i];
-            lines[i] = `        [${num(R.lat[i])}, ${num(R.lng[i])}, ${Number.isFinite(t) ? Math.round(t) : 'null'}, ${R.kind[i]}]`;
+            lines[i] = `        [${num(R.lat[i])}, ${num(R.lng[i])}, ${Number.isFinite(t) ? Math.round(t) : 'null'}, ${R.kind[i]}`;
+            // 手動紀錄多存編號、對象、名稱、加入時間（匯入時逐筆合併用）
+            if (manual) { const it = s.items[i]; lines[i] += `, ${JSON.stringify(it.id)}, ${JSON.stringify(it.target)}, ${JSON.stringify(it.label || '')}, ${+it.added || 0}`; }
+            lines[i] += ']';
         }
         count += n;
         parts.push(lines.join(',\n'));
@@ -89,10 +96,15 @@ export function parseBackup(text) {
         if (!Array.isArray(s.records)) throw new Error(`第 ${si + 1} 個來源沒有紀錄`);
         const n = s.records.length;
         const lat = new Float64Array(n), lng = new Float64Array(n), time = new Float64Array(n), kind = new Uint8Array(n);
+        const manual = s.type === 'manual', items = [];
         let bad = 0, o = 0;
         for (const r of s.records) {
-            const [la, lo, t, k] = Array.isArray(r) ? r : [];
-            if (!(Math.abs(la) <= 90 && Math.abs(lo) <= 180) || !(k >= 0 && k <= 3)) { bad++; continue; }
+            const [la, lo, t, k, mid, target, label, added] = Array.isArray(r) ? r : [];
+            if (!(Math.abs(la) <= 90 && Math.abs(lo) <= 180) || !(k >= 0 && k <= 4)) { bad++; continue; }
+            if (manual) {
+                if (typeof mid !== 'string' || !mid || typeof target !== 'string') { bad++; continue; }
+                items.push({ id: mid, target, label: String(label || ''), lat: la, lng: lo, time: t == null ? null : +t, area: k === 4, added: +added || 0 });
+            }
             lat[o] = la; lng[o] = lo; time[o] = t == null ? NaN : +t; kind[o] = k; o++;
         }
         const src = {
@@ -102,6 +114,7 @@ export function parseBackup(text) {
             restored: { from: d.exported || null, bad },
         };
         if (s.formats) src.formats = s.formats;
+        if (manual) src.items = items;
         return src;
     });
     return { sources, settings: d.settings || {}, exported: d.exported || null };

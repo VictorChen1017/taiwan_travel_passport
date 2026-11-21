@@ -11,11 +11,12 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
 <link rel="stylesheet" href="css/theme.css?v=20261120">
-<link rel="stylesheet" href="css/explore.css?v=20261120c">
-<link rel="stylesheet" href="css/app.css?v=20261120f">
+<link rel="stylesheet" href="css/explore.css?v=20261121a">
+<link rel="stylesheet" href="css/app.css?v=20261121a">
+<link rel="stylesheet" href="css/report.css?v=20261121a">
 <!-- 主題在畫面出現前套用，避免先閃白 -->
 <script src="js/theme.js?v=20261120"></script>
-<script type="module" src="js/app.js?v=20261120g"></script>
+<script type="module" src="js/app.js?v=20261121b"></script>
 </head>
 <body>
 
@@ -28,6 +29,7 @@
             <button type="button" data-mode="photo" title="只用照片計算（含以張數計算的成就）">照片<span class="long">模式</span></button>
             <button type="button" data-mode="visit" title="照片與時間軸合併，任一筆紀錄就算造訪">造訪<span class="long">模式</span></button>
         </div>
+        <button type="button" class="app-btn" id="reportBtn" title="把成就做成一張 PNG 圖片（只含地名與日期）" hidden>🖼 <span>成就報表</span></button>
         <button type="button" class="app-btn" id="importBtn" hidden>📂 <span>匯入資料</span></button>
         <button type="button" class="app-iconbtn" data-theme-toggle title="切換淺色／深色模式" aria-label="切換淺色／深色模式">
             <span class="t-light">🌙</span><span class="t-dark">☀️</span></button>
