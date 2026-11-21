@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>手機照片 GPS 測試（開發用）</title>
+<link rel="stylesheet" href="../css/theme.css">
+<script src="../js/theme.js"></script>
+<style>
+  body { margin: 0; padding: 16px; font: calc(14px * var(--fs, 1))/1.5 "Microsoft JhengHei", system-ui, sans-serif; }
+  h1 { font-size: calc(18px * var(--fs, 1)); margin: 0 0 4px; }
+  .muted { color: var(--c-text-muted); font-size: calc(13px * var(--fs, 1)); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px;
+    border: 1px solid var(--c-border-strong); border-radius: 8px; background: var(--c-surface-3); color: var(--c-text);
+    font: inherit; font-size: calc(15px * var(--fs, 1)); cursor: pointer;
+  }
+  .btn.primary { background: var(--c-accent); border-color: var(--c-accent-strong); color: var(--c-on-accent); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  input[type=file] { display: none; }
+  .card { background: var(--c-surface-2); border: 1px solid var(--c-border); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
+  .stats { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: calc(15px * var(--fs, 1)); }
+  .ok { color: var(--c-success); font-weight: bold; }
+  .warn { color: var(--c-text-muted); font-weight: bold; }
+  .bad { color: var(--c-danger); font-weight: bold; }
+  .ua { word-break: break-all; font-size: calc(12px * var(--fs, 1)); color: var(--c-text-muted); }
+  .tbl-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: calc(13px * var(--fs, 1)); }
+  td, th { border: 1px solid var(--c-border); padding: 3px 6px; text-align: left; vertical-align: top; white-space: nowrap; }
+  td.name { white-space: normal; word-break: break-all; min-width: 8em; }
+  th { background: var(--c-surface-3); }
+  #copyMsg { margin-left: 4px; }
+</style>
+</head>
+<body>
+<h1>手機照片 GPS 測試（開發用）</h1>
+<p class="muted">用正式的 EXIF Worker 讀照片的 GPS 與拍攝時間，看手機的相片挑選器有沒有把位置資訊剝掉。<br>
+照片只在這支手機的瀏覽器內讀取：不上傳、不儲存，關掉頁面就沒了。</p>
+
+<div class="bar">
+  <button type="button" class="btn primary" id="btnAlbum">📷 從相簿選</button>
+  <button type="button" class="btn" id="btnFiles">📁 從檔案選</button>
+  <button type="button" class="btn" data-theme-toggle title="切換淺色／深色模式" aria-label="切換淺色／深色模式">🌓</button>
+</div>
+<input type="file" id="inAlbum" accept="image/*" multiple>
+<input type="file" id="inFiles" multiple>
+<p class="muted">「從相簿選」：iOS 照片圖庫／Android 系統相片挑選器，可能剝除位置。<br>
+「從檔案選」：iOS 會開「檔案」App（可到「瀏覽 → 照片」或先把照片存到檔案），通常保留原始檔；Android 會開檔案管理員。</p>
+
+<div class="card">
+  <div class="ua" id="ua"></div>
+</div>
+
+<div id="result"><p class="muted">還沒選照片。</p></div>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const UA = navigator.userAgent;
+$('ua').textContent = 'User-Agent：' + UA;
+
+const worker = new Worker(new URL('../js/worker/exif.worker.js', import.meta.url), { type: 'module' });
+let seq = 0;
+const pending = new Map();
+worker.onmessage = e => { const p = pending.get(e.data.id); if (p) { pending.delete(e.data.id); p(e.data); } };
+worker.onerror = e => { $('result').innerHTML = ''; $('result').append(Object.assign(document.createElement('p'), { className: 'bad', textContent: 'Worker 載入失敗：' + (e.message || e) })); };
+const parse = files => new Promise(res => { const id = ++seq; pending.set(id, res); worker.postMessage({ id, files }); });
+
+const STATUS = [['有 GPS', 'ok'], ['沒 GPS', 'warn'], ['讀取失敗', 'bad']];
+const pad = n => String(n).padStart(2, '0');
+const fmtTime = t => {
+    if (!Number.isFinite(t)) return '—';
+    const d = new Date(t * 1000);   // 當地時鐘時間當 UTC
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+};
+const fmtSize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1024).toFixed(0) + ' KB';
+const ext = name => { const i = name.lastIndexOf('.'); return i > 0 ? name.slice(i + 1).toLowerCase() : '（無）'; };
+
+let last = null;   // 最近一次結果（給「複製摘要」用）
+
+async function run(files, source) {
+    files = Array.from(files);
+    if (!files.length) return;
+    $('btnAlbum').disabled = $('btnFiles').disabled = true;
+    $('result').innerHTML = `<p class="muted">解析 ${files.length} 張中…</p>`;
+    const t0 = performance.now();
+    const r = await parse(files);
+    const ms = Math.round(performance.now() - t0);
+    $('btnAlbum').disabled = $('btnFiles').disabled = false;
+
+    const count = [0, 0, 0];
+    let withTime = 0;
+    const byType = {};
+    files.forEach((f, i) => {
+        const s = r.status[i];
+        count[s]++;
+        if (Number.isFinite(r.time[i])) withTime++;
+        const k = `${f.type || '（空）'} .${ext(f.name)}`;
+        const b = byType[k] ||= [0, 0, 0];
+        b[s]++;
+    });
+    last = { source, n: files.length, count, withTime, byType, ms };
+    window.__phoneGps = { ...last, lat: Array.from(r.lat), lng: Array.from(r.lng), time: Array.from(r.time), status: Array.from(r.status), names: files.map(f => f.name) };
+
+    const root = $('result');
+    root.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div><b>${source}</b>：${files.length} 張，解析 ${ms} 毫秒（平均 ${(ms / files.length).toFixed(0)} 毫秒／張）</div>
+      <div class="stats">
+        <span class="ok">有 GPS ${count[0]}</span>
+        <span class="warn">沒 GPS ${count[1]}</span>
+        <span class="bad">讀取失敗 ${count[2]}</span>
+        <span>有拍攝時間 ${withTime}</span>
+      </div>
+      <div class="bar"><button type="button" class="btn" id="btnCopy">📋 複製摘要（不含座標）</button><span class="muted" id="copyMsg"></span></div>`;
+    root.append(card);
+    $('btnCopy').onclick = copySummary;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'tbl-wrap';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = '<thead><tr><th>#</th><th>檔名</th><th>類型</th><th>大小</th><th>緯度</th><th>經度</th><th>拍攝時間</th><th>狀態</th></tr></thead>';
+    const tb = document.createElement('tbody');
+    files.forEach((f, i) => {
+        const s = r.status[i];
+        const tr = document.createElement('tr');
+        const cells = [
+            i + 1, f.name, f.type || '（空）', fmtSize(f.size),
+            s === 0 ? r.lat[i].toFixed(3) : '—', s === 0 ? r.lng[i].toFixed(3) : '—',
+            fmtTime(r.time[i]), STATUS[s][0],
+        ];
+        cells.forEach((v, j) => {
+            const td = document.createElement('td');
+            td.textContent = v;
+            if (j === 1) td.className = 'name';
+            if (j === 7) td.className = STATUS[s][1];
+            tr.append(td);
+        });
+        tb.append(tr);
+    });
+    tbl.append(tb);
+    wrap.append(tbl);
+    root.append(wrap);
+}
+
+function summaryText() {
+    const L = last;
+    const lines = [
+        `手機照片 GPS 測試｜${L.source}`,
+        `User-Agent：${UA}`,
+        `共 ${L.n} 張：有 GPS ${L.count[0]}、沒 GPS ${L.count[1]}、讀取失敗 ${L.count[2]}；有拍攝時間 ${L.withTime}`,
+        `解析 ${L.ms} 毫秒`,
+        '依類型（有 GPS／沒 GPS／失敗）：',
+        ...Object.entries(L.byType).map(([k, b]) => `  ${k}：${b[0]}／${b[1]}／${b[2]}`),
+    ];
+    return lines.join('\n');
+}
+
+async function copySummary() {
+    const text = summaryText();
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+        // 舊瀏覽器或非安全連線：退回 textarea + execCommand
+        const ta = Object.assign(document.createElement('textarea'), { value: text });
+        document.body.append(ta); ta.select();
+        try { ok = document.execCommand('copy'); } catch (e2) { /* 無 */ }
+        ta.remove();
+    }
+    $('copyMsg').textContent = ok ? '已複製' : '無法自動複製，請長按下方文字全選後複製';
+    if (!ok && !$('copyBox')) {
+        const box = Object.assign(document.createElement('textarea'), { id: 'copyBox', readOnly: true, value: text, rows: 8 });
+        box.style.cssText = 'width:100%;box-sizing:border-box;font:inherit;font-size:calc(12px * var(--fs, 1));background:var(--c-surface);color:var(--c-text);border:1px solid var(--c-border-strong);border-radius:6px;';
+        $('btnCopy').closest('.card').append(box);
+        box.focus(); box.select();
+    }
+}
+
+const bind = (btn, input, source) => {
+    $(btn).onclick = () => $(input).click();
+    $(input).onchange = e => { run(e.target.files, source); e.target.value = ''; };
+};
+bind('btnAlbum', 'inAlbum', '從相簿選');
+bind('btnFiles', 'inFiles', '從檔案選');
+window.__phoneGpsRun = run;   // 桌機自動測試用
+</script>
+</body>
+</html>
