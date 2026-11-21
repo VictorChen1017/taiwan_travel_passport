@@ -75,24 +75,6 @@ button {
     font-size: calc(13px * var(--fs, 1));
 }
 
-.app-privacy {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    font-size: calc(13px * var(--fs, 1));
-    color: var(--c-success-strong);
-    background: transparent;
-    border: 1px solid var(--c-success);
-    border-radius: 999px;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.app-privacy:hover {
-    background: var(--c-hover);
-}
-
 .app-actions {
     display: flex;
     align-items: center;
@@ -302,7 +284,6 @@ button {
 
     .app-brand small,
     .app-brand-icon,
-    .app-privacy span,
     .app-mode .long,
     #importBtn,
     #reportBtn,
@@ -392,19 +373,228 @@ a.app-btn {
     margin: 0 auto;
 }
 
-.app-hero h1 {
+/* 首頁上半：標語、三步驟（左）＋範例圖（右）；手機改成 標語 → 範例圖 → 三步驟 */
+.app-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(200px, 280px);
+    grid-template-rows: auto 1fr;   /* 範例圖比左邊高時，多出的高度給第二列，標語和步驟才不會被拉開 */
+    grid-template-areas: "hero sample" "steps sample";
+    gap: 18px 32px;
+    align-items: start;
     margin: 12px 0 8px;
-    font-size: calc(26px * var(--fs, 1));
+}
+
+.app-hero { grid-area: hero; }
+.app-steps { grid-area: steps; }
+.app-sample { grid-area: sample; }
+
+.app-hero h1 {
+    margin: 8px 0 10px;
+    font-size: calc(32px * var(--fs, 1));
+    line-height: 1.35;
     color: var(--c-text-strong);
+    word-break: keep-all;   /* 讓 <wbr> 決定換行位置，不在詞中間斷 */
 }
 
 .app-hero p {
-    margin: 0 0 20px;
+    margin: 0;
+    font-size: calc(15.5px * var(--fs, 1));
+    line-height: 1.7;
     color: var(--c-text-muted);
 }
 
-/* 本機運算說明：<details>，預設收起只留第一行 */
+/* 三步驟卡片：is-done 打勾、is-current 強調、is-locked 變淡（還沒匯入時的 2、3） */
+.app-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.app-step {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
+    padding: 14px 14px 12px;
+    font: inherit;
+    text-align: left;
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px var(--c-shadow);
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+}
+
+@media (hover: hover) {
+    .app-step:not(:disabled):hover {
+        border-color: var(--c-accent);
+        transform: translateY(-2px);
+    }
+}
+
+.app-step b {
+    font-size: calc(16px * var(--fs, 1));
+    color: var(--c-text-strong);
+}
+
+.app-step-n {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: calc(22px * var(--fs, 1));
+    height: calc(22px * var(--fs, 1));
+    font-size: calc(12px * var(--fs, 1));
+    font-weight: bold;
+    color: var(--c-text-muted);
+    border: 1.5px solid var(--c-border-strong);
+    border-radius: 50%;
+}
+
+.app-step-icon {
+    font-size: calc(26px * var(--fs, 1));
+    line-height: 1.2;
+}
+
+.app-step-desc {
+    font-size: calc(13px * var(--fs, 1));
+    line-height: 1.5;
+    color: var(--c-text-muted);
+}
+
+.app-step.is-current {
+    border-color: var(--c-accent);
+    box-shadow: 0 0 0 3px var(--c-accent-soft);
+}
+
+.app-step.is-current .app-step-n {
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+}
+
+.app-step.is-done .app-step-n {
+    color: var(--c-on-accent);
+    background: var(--c-success);
+    border-color: var(--c-success);
+}
+
+.app-step.is-done .app-step-desc {
+    color: var(--c-success-strong);
+}
+
+.app-step:disabled {
+    cursor: default;
+    opacity: 0.55;
+    box-shadow: none;
+}
+
+/* 範例圖：只露出上半（標題、探索率、地圖），下緣淡出；點了看完整圖 */
+.app-sample {
+    position: relative;
+    display: block;
+    height: calc(380px * var(--fs, 1));
+    overflow: hidden;
+    color: inherit;
+    text-decoration: none;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+    box-shadow: 0 6px 20px var(--c-shadow);
+    transform: rotate(1.5deg);
+}
+
+.app-sample img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.app-sample .t-dark { display: none; }
+:root[data-theme="dark"] .app-sample .t-dark { display: block; }
+:root[data-theme="dark"] .app-sample .t-light { display: none; }
+
+.app-sample::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 45%;
+    background: linear-gradient(to bottom, transparent, var(--c-surface) 85%);
+    pointer-events: none;
+}
+
+.app-sample-cap {
+    position: absolute;
+    z-index: 1;
+    inset: auto 0 10px;
+    font-size: calc(12.5px * var(--fs, 1));
+    text-align: center;
+    color: var(--c-text-muted);
+}
+
+@media (max-width: 900px) {
+    .app-top {
+        grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+    }
+
+    .app-hero h1 {
+        font-size: calc(26px * var(--fs, 1));
+    }
+
+    .app-steps {
+        grid-template-columns: 1fr;
+    }
+
+    /* 平板以下步驟改直排：左邊圖示、右邊文字 */
+    .app-step {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        grid-template-rows: auto auto;
+        column-gap: 12px;
+        align-items: center;
+        padding: 12px 44px 12px 14px;
+    }
+
+    .app-step-icon {
+        grid-row: 1 / 3;
+    }
+
+    .app-step-n {
+        top: 50%;
+        transform: translateY(-50%);
+    }
+}
+
+@media (max-width: 640px) {
+    .app-top {
+        grid-template-columns: 1fr;
+        grid-template-rows: none;
+        grid-template-areas: "hero" "sample" "steps";
+    }
+
+    .app-hero h1 {
+        font-size: calc(24px * var(--fs, 1));
+    }
+
+    .app-sample {
+        height: 200px;
+        transform: none;
+    }
+}
+
+/* 本機運算說明：<details>，預設收起只留第一行；放在「選擇資料來源」標題下 */
 .app-privacy-box {
+    margin-bottom: 14px;
     padding: 10px 16px;
     background: var(--c-surface-2);
     border: 1px solid var(--c-success);
@@ -446,15 +636,6 @@ a.app-btn {
 
 [open] > summary .app-more::after {
     content: " ▴";
-}
-
-.app-privacy-box.flash {
-    animation: app-flash 1.2s ease;
-}
-
-@keyframes app-flash {
-    0%, 60% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-success) 35%, transparent); }
-    100% { box-shadow: none; }
 }
 
 .app-privacy-icon {

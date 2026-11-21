@@ -6,10 +6,13 @@
 
 - 只綁 127.0.0.1（本機才連得到）；127.0.0.1 算安全環境，資料夾選擇、module Worker 都能用
 - 正式上線時 GitHub Pages 會快取 10 分鐘，改版仍要更新 index.html 的版本參數（?v=）
+- POST /__save?path=img/xxx.webp：dev/sample.html 用來存首頁範例圖；只能寫 img/ 底下的 .webp／.png，正式網站沒有這個功能
 """
 import http.server
 import os
+import re
 import sys
+import urllib.parse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -24,6 +27,23 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header('Cache-Control', 'no-store')
         super().end_headers()
+
+    def do_POST(self):
+        u = urllib.parse.urlparse(self.path)
+        rel = urllib.parse.parse_qs(u.query).get('path', [''])[0]
+        if u.path != '/__save' or not re.fullmatch(r'img/[A-Za-z0-9_-]+\.(webp|png)', rel):
+            self.send_error(403)
+            return
+        n = int(self.headers.get('Content-Length') or 0)
+        if not 0 < n <= 20 * 1024 * 1024:
+            self.send_error(400)
+            return
+        dest = os.path.join(ROOT, *rel.split('/'))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(dest, 'wb') as f:
+            f.write(self.rfile.read(n))
+        self.send_response(204)
+        self.end_headers()
 
     def log_message(self, fmt, *args):
         # 只記錄錯誤，避免每個圖資請求都印一行

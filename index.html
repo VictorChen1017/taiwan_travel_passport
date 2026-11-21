@@ -12,18 +12,17 @@
 
 <link rel="stylesheet" href="css/theme.css?v=20261120">
 <link rel="stylesheet" href="css/explore.css?v=20261121g">
-<link rel="stylesheet" href="css/app.css?v=20261121l">
+<link rel="stylesheet" href="css/app.css?v=20261121m">
 <link rel="stylesheet" href="css/report.css?v=20261121j">
 <!-- 主題在畫面出現前套用，避免先閃白 -->
 <script src="js/theme.js?v=20261120"></script>
-<script type="module" src="js/app.js?v=20261121v"></script>
+<script type="module" src="js/app.js?v=20261121w"></script>
 </head>
 <body>
 
 <header class="app-head">
     <button type="button" class="app-iconbtn app-toc-btn" id="tocBtn" aria-label="開啟目錄" aria-controls="toc" aria-expanded="false" hidden>☰</button>
     <a class="app-brand" href="./" aria-label="台灣旅遊護照首頁"><span class="app-brand-icon">🛂</span> <b>台灣旅遊護照</b></a>
-    <button type="button" class="app-privacy" id="privacyBtn" title="你的照片與位置完全掌握在你手中">🔒 <span>本機運算</span></button>
     <div class="app-actions">
         <div class="ex-seg app-mode" id="modeSeg" role="group" aria-label="計算模式" hidden>
             <button type="button" data-mode="photo" title="只用照片計算（含以張數計算的成就）">照片<span class="long">模式</span></button>
@@ -45,22 +44,27 @@
     <main class="app-main" id="main">
         <!-- 匯入引導 -->
         <section class="app-landing" id="landing">
-            <div class="app-hero">
-                <h1>🛂 台灣旅遊護照</h1>
-                <p>匯入照片或 Google 時間軸，看看你走過台灣的哪些地方。<a href="help.html" target="_blank" rel="noopener">第一次使用？看說明 →</a></p>
+            <div class="app-top">
+                <div class="app-hero">
+                    <h1>將足跡，變成一本<wbr>專屬於你的旅行護照</h1>
+                    <p>從照片和 Google 時間軸，找出你走過的縣市、鄉鎮、山頂與車站，一項一項解鎖成就。<a href="help.html" target="_blank" rel="noopener">第一次使用？看說明 →</a></p>
+                </div>
+                <!-- 三步驟：跟著狀態變（js/app.js renderSteps），點了直接前往 -->
+                <ol class="app-steps" id="steps">
+                    <li><button type="button" class="app-step" data-step="import"><span class="app-step-n">1</span><span class="app-step-icon">📂</span>
+                        <b>匯入資料</b><span class="app-step-desc">照片、Google 時間軸或備份檔，全部在本機計算</span></button></li>
+                    <li><button type="button" class="app-step" data-step="view"><span class="app-step-n">2</span><span class="app-step-icon">🏅</span>
+                        <b>檢視成就</b><span class="app-step-desc">迷霧地圖、縣市鄉鎮制霸、百岳、鐵道、景點</span></button></li>
+                    <li><button type="button" class="app-step" data-step="share"><span class="app-step-n">3</span><span class="app-step-icon">📤</span>
+                        <b>匯出卡片</b><span class="app-step-desc">把成就做成一張圖片分享，日期、常去地點可以隱藏</span></button></li>
+                </ol>
+                <!-- 範例圖：dev/sample.html 用虛構資料產生；跟著淺色／深色切換 -->
+                <a class="app-sample" href="img/sample-report-light.webp" target="_blank" rel="noopener" title="看完整範例圖（另開分頁）">
+                    <img class="t-light" src="img/sample-report-light.webp" alt="成就卡片範例：小明的足跡" width="1080" height="2804" loading="lazy">
+                    <img class="t-dark" src="img/sample-report-dark.webp" alt="" width="1080" height="2804" loading="lazy">
+                    <span class="app-sample-cap">範例：小明的足跡</span>
+                </a>
             </div>
-
-            <!-- 本機運算說明：預設收起，只留第一行 -->
-            <details class="app-privacy-box" id="privacyBox">
-                <summary><span class="app-privacy-icon">🔒</span><b>本機運算：你的照片與位置完全掌握在你手中</b><span class="app-more">說明</span></summary>
-                <ul>
-                    <li>所有計算都在你的瀏覽器裡完成，<b>不會上傳</b>任何照片、座標或時間。</li>
-                    <li>本網站<b>不使用任何追蹤或分析工具</b>，也沒有後端伺服器。</li>
-                    <li>網站只會下載公開的圖資（村里界線、成就設定）；明細小地圖會向 OpenStreetMap 載入地圖圖磚。完整清單見<a href="help.html#privacy" target="_blank" rel="noopener">說明頁</a>。</li>
-                    <li>匯入結果只存在這個瀏覽器，可以隨時刪除。</li>
-                </ul>
-            </details>
-
             <!-- 已匯入的資料（有資料時才出現）：勾選後刪除 -->
             <div class="app-imported" id="imported" hidden>
                 <div class="app-imported-head">
@@ -80,6 +84,17 @@
             </div>
 
             <h2 class="app-sub" id="sourcesTitle">選擇資料來源</h2>
+            <!-- 本機運算說明：放在選資料來源的地方（這裡才會關心隱私）；預設收起，只留第一行 -->
+            <details class="app-privacy-box" id="privacyBox">
+                <summary><span class="app-privacy-icon">🔒</span><b>本機運算：你的照片與位置完全掌握在你手中</b><span class="app-more">說明</span></summary>
+                <ul>
+                    <li>所有計算都在你的瀏覽器裡完成，<b>不會上傳</b>任何照片、座標或時間。</li>
+                    <li>本網站<b>不使用任何追蹤或分析工具</b>，也沒有後端伺服器。</li>
+                    <li>網站只會下載公開的圖資（村里界線、成就設定）；明細小地圖會向 OpenStreetMap 載入地圖圖磚。完整清單見<a href="help.html#privacy" target="_blank" rel="noopener">說明頁</a>。</li>
+                    <li>匯入結果只存在這個瀏覽器，可以隨時刪除。</li>
+                </ul>
+            </details>
+
             <div class="app-sources">
                 <div class="app-source app-drop" id="folderCard">
                     <div class="app-source-icon">📁</div>

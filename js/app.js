@@ -376,6 +376,7 @@ function renderSources() {
     const box = $('imported');
     box.hidden = !app.sources.length;
     $('sourcesTitle').textContent = app.sources.length ? '再加入資料來源' : '選擇資料來源';
+    renderSteps();
     $('sourceList').innerHTML = app.sources.map(s => `
         <li data-id="${esc(s.id)}">
             <input type="checkbox" aria-label="選取「${esc(s.name || '未命名')}」">
@@ -383,6 +384,23 @@ function renderSources() {
             <div><div class="name">${esc(s.name || '未命名')}</div><div class="meta">${sourceSummary(s)}<br><span class="upd">最後更新 ${ymdLocal(updatedOf(s))}</span></div></div>
         </li>`).join('');
     updateSelection();
+}
+
+/** 首頁三步驟：還沒匯入時只有 1 可按；匯入後 1 打勾、2 是下一步、3 可直接開分享成就 */
+function renderSteps() {
+    const n = app.sources.length;
+    const set = (step, cls, disabled, desc) => {
+        const b = $('steps').querySelector(`[data-step="${step}"]`);
+        b.classList.remove('is-done', 'is-current');
+        if (cls) b.classList.add(cls);
+        b.disabled = disabled;
+        const d = b.querySelector('.app-step-desc');
+        d.dataset.base ??= d.textContent;
+        d.textContent = desc || d.dataset.base;
+    };
+    set('import', n ? 'is-done' : 'is-current', false, n ? `✓ 已匯入 ${n} 個來源，可以再加入` : '');
+    set('view', n ? 'is-current' : '', !n, n ? '' : '匯入資料後解鎖');
+    set('share', '', !n, n ? '' : '匯入資料後解鎖');
 }
 
 /** 依勾選狀態更新：全選框、所選筆數、刪除按鈕、列的底色 */
@@ -645,12 +663,19 @@ function bindUi() {
     $('reportBtn').addEventListener('click', openReport);
     $('viewBtn').addEventListener('click', () => compute());
 
-    $('privacyBtn').addEventListener('click', () => {
-        if ($('landing').hidden) showLanding();
-        const box = $('privacyBox');
-        box.open = true;   // 頂列的 🔒 會展開說明
-        box.scrollIntoView({ block: 'start' });
-        box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
+    // 首頁三步驟：匯入 → 捲到資料來源（已匯入時捲到已匯入的資料）；檢視成就；匯出卡片（先算好再開分享成就）
+    $('steps').addEventListener('click', async e => {
+        const step = e.target.closest('.app-step:not(:disabled)')?.dataset.step;
+        if (step === 'import') $(app.sources.length ? 'imported' : 'sourcesTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        else if (step === 'view') compute();
+        else if (step === 'share') {
+            if (!app.explore || !app.explore.data()) await compute({ show: false });
+            openReport();
+        }
+    });
+    // 範例圖：另開分頁看完整圖，跟著目前的淺色／深色
+    document.querySelector('.app-sample').addEventListener('click', e => {
+        e.currentTarget.href = `img/sample-report-${document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'}.webp`;
     });
 
     $('tocBtn').addEventListener('click', () => openToc(!$('toc').classList.contains('open')));

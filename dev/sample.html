@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>首頁範例圖產生器（開發用）</title>
+<link rel="stylesheet" href="../css/theme.css">
+<script src="../js/theme.js"></script>
+<style>
+  body { margin: 16px; font: 14px/1.5 "Microsoft JhengHei", system-ui, sans-serif; color: var(--c-text); background: var(--c-bg); }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .muted { color: var(--c-text-muted); }
+  #out { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+  #out figure { margin: 0; }
+  #out img { width: 360px; border: 1px solid var(--c-border); }
+</style>
+</head>
+<body>
+<h1>首頁範例圖產生器（開發用）</h1>
+<p class="muted">用<b>虛構的示範足跡</b>（車站、山頂、景點座標＋固定亂數的日期，不含任何真實紀錄）產生「分享成就」的範例圖，淺色、深色各一張，給首頁的範例縮圖用。<br>
+用 <code>python tools/dev_server.py</code> 開啟時會直接存到 <code>img/sample-report-light.webp</code>、<code>img/sample-report-dark.webp</code>；報表外觀改版後重新開一次這頁即可。</p>
+<div id="sum">產生中…</div>
+<div id="out"></div>
+<script type="module" src="./sample.js"></script>
+</body>
+</html>
