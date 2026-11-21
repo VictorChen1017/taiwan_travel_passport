@@ -328,6 +328,11 @@ button {
     text-align: center;
 }
 
+/* 「查看成就」（回到成就徽章總覽）緊接著下方的「匯入資料」 */
+.app-toc .toc-import[data-act="view"] {
+    margin-bottom: 8px;
+}
+
 /* 做成按鈕樣式的連結（頂列「說明」、說明頁「回到成就頁」） */
 a.app-btn {
     color: var(--c-text);

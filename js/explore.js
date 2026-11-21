@@ -664,13 +664,13 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         }
     }
 
-    /** 展開成就區並捲到某一類（目錄與總覽共用） */
+    /** 展開成就區並捲到某一類（目錄與總覽共用）：只展開這一類，其餘收起，方便換到別類 */
     function jumpToGroup(g) {
         const sec = root.querySelector('#ex-badges-sec');
         sec.open = true;
         const group = root.querySelector(`#ach-${g}`);
         if (!group) return;
-        group.open = true;
+        root.querySelectorAll('.ex-badge-group').forEach(d => { d.open = d === group; });
         // 等展開後的版面更新再捲動；距離常有上萬像素，平滑捲動途中版面高度一變就會停錯位置，所以直接跳過去，再閃一下標示
         setTimeout(() => {
             group.scrollIntoView({ block: 'start' });
@@ -678,6 +678,14 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             void group.offsetWidth;
             group.classList.add('ex-flash');
         }, 0);
+    }
+
+    /** 回到成就徽章的總覽（各類進度環）：收起成就區與各類，捲到成就區 */
+    function showBadgeOverview() {
+        const sec = root.querySelector('#ex-badges-sec');
+        sec.open = false;
+        root.querySelectorAll('.ex-badge-group').forEach(d => { d.open = false; });
+        setTimeout(() => sec.scrollIntoView({ block: 'start' }), 0);
     }
 
     function renderBadges() {
@@ -689,6 +697,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         // 每個類別一段（可收合）：大標題＋達成數；有分區（section）的再分小標題；
         // 縣市制霸集點卡單獨一整列，其餘徽章置中排列；鐵道三類的路線制霸徽章放在集點卡上方
         const box = root.querySelector('#ex-badges');
+        // 各類預設收起；重新計算（切換模式、手動加入）時保留使用者展開的類別
+        const wasOpen = new Set([...box.querySelectorAll('.ex-badge-group[open]')].map(d => d.id));
         box.innerHTML = groups.map(g => {
             const items = list.filter(a => a.group === g);
             if (!items.length) return '';
@@ -705,7 +715,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 }
                 return `${s ? `<div class="ex-badge-sub">${esc(s)}<span>${sc.filter(a => a.done).length} / ${sc.length}</span></div>` : ''}${grid}`;
             }).join('');
-            return `<details class="ex-badge-group" id="ach-${g}" open>
+            return `<details class="ex-badge-group" id="ach-${g}"${wasOpen.has(`ach-${g}`) ? ' open' : ''}>
                 <summary class="ex-badge-group-title g-${g}">${GROUP_LABEL[g]}
                     <span>${items.filter(a => a.done).length} / ${items.length}</span></summary>
                 ${POINT_STAMPS[g] && g !== 'peak' ? grids + stampGroups(stamps) : stampGroups(stamps) + grids}</details>`;
@@ -1065,6 +1075,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             }
         },
         jumpToGroup,
+        showBadgeOverview,
         /** 目前的計算結果（成就報表用） */
         data() { return state.data; },
         /** 各大類的進度（給目錄用） */

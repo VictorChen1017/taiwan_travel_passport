@@ -618,7 +618,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
         modal.innerHTML = `
             <div class="rp-box" role="dialog" aria-modal="true" aria-labelledby="rp-title">
                 <div class="rp-head">
-                    <span id="rp-title" class="rp-title">🖼 成就報表</span>
+                    <span id="rp-title" class="rp-title">📤 分享成就</span>
                     <span class="rp-hint">產生一張 PNG 圖片，只含地名與日期，不含座標與照片</span>
                     <button type="button" class="rp-x" data-act="close" title="關閉（Esc）">✕</button>
                 </div>

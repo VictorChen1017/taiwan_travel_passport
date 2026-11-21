@@ -480,8 +480,9 @@ function renderToc() {
     const groups = ready ? app.explore.groups() : Object.keys(GROUP_LABEL).map(g => ({ g, label: GROUP_LABEL[g] }));
     const item = (href, label, attrs = '') => ready ? `<li><a href="${href}"${attrs}>${label}</a></li>` : `<li><span class="toc-off">${label}</span></li>`;
     toc.innerHTML = `
+        ${ready ? '<button type="button" class="app-btn primary toc-import" data-act="view">🏅 查看成就</button>' : ''}
         <button type="button" class="app-btn toc-import" data-act="import">📂 匯入資料</button>
-        ${ready ? '<button type="button" class="app-btn toc-report" data-act="report">🖼 成就報表</button>' : ''}
+        ${ready ? '<button type="button" class="app-btn toc-report" data-act="report">📤 分享成就</button>' : ''}
         <a class="app-btn toc-report toc-help" href="help.html">❓ 使用說明</a>
         ${ready && hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path" title="時間軸裡移動時經過的點（例如坐車經過的鄉鎮）也算解鎖">
             <input type="checkbox" id="pathToggle"${app.includePath ? ' checked' : ''}> 包含移動途中</label>` : ''}
@@ -554,6 +555,7 @@ function bindUi() {
         if (e.target.closest('.toc-path')) return;
         if (e.target.closest('[data-act="import"]')) { openToc(false); showLanding(); return; }
         if (e.target.closest('[data-act="report"]')) { openToc(false); openReport(); return; }
+        if (e.target.closest('[data-act="view"]')) { openToc(false); showExplore(); app.explore.showBadgeOverview(); return; }
         const a = e.target.closest('a');
         if (!a || a.classList.contains('toc-help')) return;   // 使用說明：照連結換頁
         openToc(false);
