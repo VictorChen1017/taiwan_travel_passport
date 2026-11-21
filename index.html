@@ -12,11 +12,11 @@
 
 <link rel="stylesheet" href="css/theme.css?v=20261120">
 <link rel="stylesheet" href="css/explore.css?v=20261121e">
-<link rel="stylesheet" href="css/app.css?v=20261121g">
+<link rel="stylesheet" href="css/app.css?v=20261121h">
 <link rel="stylesheet" href="css/report.css?v=20261121b">
 <!-- 主題在畫面出現前套用，避免先閃白 -->
 <script src="js/theme.js?v=20261120"></script>
-<script type="module" src="js/app.js?v=20261121k"></script>
+<script type="module" src="js/app.js?v=20261121l"></script>
 </head>
 <body>
 
@@ -107,16 +107,13 @@
                         <ul>
                             <li>每次選的照片都會加進同一份「手機照片」，不會取代之前加入的；同一張照片重複選只算一次。</li>
                             <li>一次建議幾十張。iPhone 的 HEIC 照片選完後，手機需要先轉檔，張數越多等越久；照片不會上傳。</li>
-                            <li>張數較多可改用「從檔案選」：先在「照片」App 選取 → 分享 →「儲存到檔案」，再回來選取。不用轉檔，但會暫時多占一份空間，匯入完成後可以刪掉，足跡不受影響。</li>
+                            <li>張數較多時，可在選單點「選擇檔案」，從「檔案」App 選取（先在「照片」App 選取 → 分享 →「儲存到檔案」）。不用轉檔，但會暫時多占一份空間，匯入完成後可以刪掉，足跡不受影響。</li>
                             <li>沒有 GPS 的照片（截圖、從通訊軟體存下來的圖）會略過。</li>
                         </ul>
                     </details>
-                    <div class="app-source-btns">
-                        <button type="button" class="app-btn primary" id="phoneAlbumBtn">從相簿選</button>
-                        <button type="button" class="app-btn" id="phoneFileBtn">從檔案選</button>
-                    </div>
-                    <input type="file" id="phoneAlbumInput" accept="image/*" multiple hidden>
-                    <input type="file" id="phoneFileInput" multiple hidden>
+                    <button type="button" class="app-btn primary" id="phoneBtn">選擇照片</button>
+                    <!-- 不設 accept：iOS 選單可選「照片圖庫」或「選擇檔案」（後者拿到 HEIC 原檔、不轉檔）；Android 開檔案選取，保留 EXIF 位置 -->
+                    <input type="file" id="phoneInput" multiple hidden>
                 </div>
                 <div class="app-source app-drop" id="timelineCard">
                     <div class="app-source-icon">🗺️</div>

@@ -686,18 +686,16 @@ function bindUi() {
         importFolder(onFound => exif.filesFromDrop(dt, onFound), '拖曳的資料夾');
     });
 
-    // 手機照片（補點）：只在觸控裝置顯示；從相簿選（iOS 會把 HEIC 轉成 JPEG）或從檔案選（原始檔）
+    // 手機照片（補點）：只在觸控裝置顯示；選取方式由系統選單決定（iOS 照片圖庫會把 HEIC 轉成 JPEG，選擇檔案拿到原檔）
     if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) $('phoneCard').hidden = false;
-    for (const [btn, input] of [['phoneAlbumBtn', 'phoneAlbumInput'], ['phoneFileBtn', 'phoneFileInput']]) {
-        $(btn).addEventListener('click', () => $(input).click());
-        $(input).addEventListener('change', e => {
-            const files = e.target.files;
-            if (!files || !files.length) return;
-            const items = exif.filesFromInput(files);
-            e.target.value = '';
-            importFolder(async () => items, '手機照片', { phone: true });
-        });
-    }
+    $('phoneBtn').addEventListener('click', () => $('phoneInput').click());
+    $('phoneInput').addEventListener('change', e => {
+        const files = e.target.files;
+        if (!files || !files.length) return;
+        const items = exif.filesFromInput(files);
+        e.target.value = '';
+        importFolder(async () => items, '手機照片', { phone: true });
+    });
 
     // Google 時間軸：選檔（可多選）或拖曳檔案／資料夾
     $('timelineBtn').addEventListener('click', () => $('timelineInput').click());
