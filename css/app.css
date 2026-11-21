@@ -817,7 +817,14 @@ a.app-btn {
     border-radius: 50%;
 }
 
-.qtip:hover,
+/* 手機點過後 :hover 會黏住，只在真的有滑鼠時才用 hover 樣式 */
+@media (hover: hover) {
+    .qtip:hover {
+        color: var(--c-on-accent);
+        background: var(--c-accent);
+    }
+}
+
 .qtip[aria-expanded="true"] {
     color: var(--c-on-accent);
     background: var(--c-accent);

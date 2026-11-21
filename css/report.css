@@ -43,6 +43,12 @@
     color: var(--c-text-strong);
 }
 
+.rp-scroll-hint {
+    display: none;
+    font-size: calc(13px * var(--fs, 1));
+    color: var(--c-text-faint);
+}
+
 .rp-hint {
     font-size: calc(13px * var(--fs, 1));
     color: var(--c-text-muted);
@@ -357,6 +363,10 @@
 
     .rp-hint {
         display: none;
+    }
+
+    .rp-scroll-hint {
+        display: inline;
     }
 
     .rp-foot {

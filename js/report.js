@@ -4,7 +4,7 @@
 // - 顏色依當下的淺色／深色主題（介面色取 css/theme.css 的 --c-*，資料色取 js/shared.js）
 // - 預設組合用選單切換，之後可以自己勾選區塊；未達成預設顯示，勾選的區塊下方展開進階選項：隱藏未達成、選子項目（鐵路各區、各捷運系統等）
 // - 可填暱稱；沒填時預覽圖顯示淡色範例「小明的足跡」，匯出時不印
-// - 隱私控制：隱藏日期、隱藏「老地方」；照片模式的鄉鎮・村里地圖可選「制霸五色」
+// - 隱私控制：隱藏月/日、隱藏「老地方」；照片模式的鄉鎮・村里地圖可選「制霸五色」
 // - 行政區尺度（迷霧地圖、每年新解鎖用）：縣市／鄉鎮／村里，旁邊「?」提醒村里容易看出住處
 //
 // 用法：
@@ -735,14 +735,15 @@ export function createReport({ getStats, loadMap, getMeta }) {
                 <div class="rp-head">
                     <span id="rp-title" class="rp-title">📤 分享成就</span>
                     <span class="rp-hint">產生一張 PNG 圖片，只含地名與日期，不含座標與照片</span>
+                    <span class="rp-scroll-hint">👇 下滑看預覽</span>
                     <button type="button" class="rp-x" data-act="close" title="關閉（Esc）">✕</button>
                 </div>
                 <div class="rp-main">
                     <div class="rp-opts">
                         <fieldset class="rp-privacy">
                             <legend>🔒 隱私控制</legend>
-                            <label class="rp-check"><input type="checkbox" id="rp-hide"> 隱藏日期
-                                <button type="button" class="qtip" data-tip="紀錄時間點只寫年份，避免別人從日期推出你的行程。" aria-label="說明：隱藏日期">?</button></label>
+                            <label class="rp-check"><input type="checkbox" id="rp-hide"> 隱藏月/日
+                                <button type="button" class="qtip" data-tip="紀錄時間點只寫年份，避免別人從日期推出你的行程。" aria-label="說明：隱藏月/日">?</button></label>
                             <label class="rp-check" id="rp-regular-row"><input type="checkbox" id="rp-regular"> 隱藏「老地方」</label>
                             <label class="rp-field" id="rp-color-row">地圖上色
                                 <select id="rp-color"><option value="year">首次解鎖年份</option><option value="count">制霸五色（照片張數，看得出常去的地方）</option></select></label>
