@@ -4,6 +4,8 @@
 
 🔒 **本機運算**：所有計算都在你的瀏覽器內完成，照片與位置資料不會上傳到任何地方。本網站不使用任何追蹤或分析工具。
 
+👉 網站：https://victorchen1017.github.io/taiwan_travel_passport/（[使用說明](help.html)）
+
 規格與開發紀錄見 [docs/SPEC.md](docs/SPEC.md)。
 
 （由「手搓迷霧」照片地圖平台的迷霧探索成就頁改寫而成。）

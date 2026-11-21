@@ -1,0 +1,182 @@
+/* 使用說明頁（help.html）：左邊目錄、右邊內文；窄畫面目錄移到上方
+   顏色一律用 css/theme.css 的 --c-*；字級寫成 calc(Npx * var(--fs, 1)) */
+
+.hp {
+    display: flex;
+    gap: 32px;
+    max-width: calc(1100px * var(--fs, 1));
+    margin: 0 auto;
+    padding: 24px 20px 40px;
+}
+
+.hp-toc {
+    position: sticky;
+    top: 80px;
+    align-self: flex-start;
+    flex-shrink: 0;
+    width: calc(200px * var(--fs, 1));
+    padding: 14px 16px;
+    font-size: calc(14px * var(--fs, 1));
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+}
+
+.hp-toc b {
+    color: var(--c-text-strong);
+}
+
+.hp-toc ol {
+    margin: 8px 0 0;
+    padding-left: 1.4em;
+}
+
+.hp-toc li {
+    margin: 4px 0;
+}
+
+.hp-toc a,
+.hp-main a {
+    color: var(--c-link);
+}
+
+.hp-main {
+    flex: 1;
+    min-width: 0;
+    max-width: calc(780px * var(--fs, 1));
+    font-size: calc(15.5px * var(--fs, 1));
+    line-height: 1.75;
+}
+
+.hp-main h1 {
+    margin: 0 0 8px;
+    font-size: calc(28px * var(--fs, 1));
+    color: var(--c-text-strong);
+}
+
+.hp-main h2 {
+    margin: 40px 0 12px;
+    padding-bottom: 6px;
+    font-size: calc(21px * var(--fs, 1));
+    color: var(--c-text-strong);
+    border-bottom: 2px solid var(--c-accent-soft);
+    scroll-margin-top: 72px;
+}
+
+.hp-main h3 {
+    margin: 22px 0 8px;
+    font-size: calc(17px * var(--fs, 1));
+    color: var(--c-text-strong);
+}
+
+.hp-main ul,
+.hp-main ol {
+    padding-left: 1.5em;
+}
+
+.hp-main li {
+    margin: 4px 0;
+}
+
+.hp-main code {
+    padding: 1px 6px;
+    font-size: 0.92em;
+    background: var(--c-surface-3);
+    border-radius: 4px;
+}
+
+.hp-lead {
+    font-size: calc(17px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.hp-note {
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.hp-box {
+    margin: 16px 0;
+    padding: 12px 16px;
+    border-radius: 10px;
+}
+
+.hp-box.ok {
+    background: color-mix(in srgb, var(--c-success) 12%, transparent);
+    border: 1px solid var(--c-success);
+}
+
+.hp-box.warn {
+    background: var(--c-accent-soft);
+    border: 1px solid var(--c-accent);
+}
+
+.hp-table {
+    width: 100%;
+    margin: 10px 0;
+    font-size: calc(14.5px * var(--fs, 1));
+    border-collapse: collapse;
+}
+
+.hp-table th,
+.hp-table td {
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+    border: 1px solid var(--c-border);
+}
+
+.hp-table thead th {
+    color: var(--c-text-strong);
+    background: var(--c-surface-2);
+}
+
+.hp-table tbody th {
+    font-weight: normal;
+    color: var(--c-text-muted);
+    white-space: nowrap;
+}
+
+.hp-faq {
+    margin: 8px 0;
+    padding: 10px 14px;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+}
+
+.hp-faq summary {
+    font-weight: bold;
+    color: var(--c-text-strong);
+    cursor: pointer;
+}
+
+.hp-faq p {
+    margin: 8px 0 2px;
+}
+
+.app-foot a {
+    color: var(--c-link);
+}
+
+@media (max-width: 760px) {
+    .hp {
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px 14px 32px;
+    }
+
+    .hp-toc {
+        position: static;
+        width: auto;
+    }
+
+    .hp-table {
+        font-size: calc(13.5px * var(--fs, 1));
+    }
+
+    .hp-table th,
+    .hp-table td {
+        padding: 6px 7px;
+    }
+}

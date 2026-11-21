@@ -277,8 +277,9 @@ button {
     .app-privacy span,
     .app-mode .long,
     #importBtn,
-    #reportBtn {
-        display: none !important;   /* 匯入資料、成就報表改由目錄抽屜進入 */
+    #reportBtn,
+    #helpBtn {
+        display: none !important;   /* 匯入資料、成就報表、說明改由目錄抽屜進入 */
     }
 
     .app-actions {
@@ -305,6 +306,42 @@ button {
     width: 100%;
     margin: 0 0 14px;
     text-align: center;
+}
+
+/* 做成按鈕樣式的連結（頂列「說明」、說明頁「回到成就頁」） */
+a.app-btn {
+    color: var(--c-text);
+    text-decoration: none;
+}
+
+/* 頂列「說明」：一般寬度顯示文字，窄畫面只留圖示 */
+
+/* 中等寬度頂列放不下：說明、成就報表只留圖示，模式按鈕用短標籤 */
+@media (max-width: 1000px) {
+    #helpBtn span,
+    #reportBtn span,
+    .app-mode .long { display: none; }
+    #helpBtn,
+    #reportBtn { padding: 6px 10px; }
+}
+
+.app-mode button {
+    white-space: nowrap;
+}
+
+.app-hero a,
+.app-privacy-box a,
+.app-foot a {
+    color: var(--c-link);
+}
+
+/* 目錄的「使用說明」只在窄畫面（頂列放不下）時出現 */
+.app-toc .toc-help {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    .app-toc .toc-help { display: block; }
 }
 
 .app-toc .toc-report {

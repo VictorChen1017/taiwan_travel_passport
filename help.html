@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>使用說明・台灣旅遊護照</title>
+<meta name="description" content="台灣旅遊護照的使用說明：如何匯入照片與 Google 時間軸、成就怎麼計算、隱私與對外連線、圖資授權。">
+
+<link rel="stylesheet" href="css/theme.css?v=20261120">
+<link rel="stylesheet" href="css/app.css?v=20261121c">
+<link rel="stylesheet" href="css/help.css?v=20261121a">
+<script src="js/theme.js?v=20261120"></script>
+</head>
+<body>
+
+<header class="app-head">
+    <a class="app-brand" href="./" aria-label="回到台灣旅遊護照"><span class="app-brand-icon">🛂</span> <b>台灣旅遊護照</b></a>
+    <div class="app-actions">
+        <a class="app-btn" href="./">← <span>回到成就頁</span></a>
+        <button type="button" class="app-iconbtn" data-theme-toggle title="切換淺色／深色模式" aria-label="切換淺色／深色模式">
+            <span class="t-light">🌙</span><span class="t-dark">☀️</span></button>
+    </div>
+</header>
+
+<div class="hp">
+    <nav class="hp-toc" aria-label="說明目錄">
+        <b>目錄</b>
+        <ol>
+            <li><a href="#start">開始使用</a></li>
+            <li><a href="#sources">準備資料</a></li>
+            <li><a href="#rules">成就怎麼計算</a></li>
+            <li><a href="#manual">手動紀錄</a></li>
+            <li><a href="#report">成就報表</a></li>
+            <li><a href="#backup">換電腦、存到手機</a></li>
+            <li><a href="#privacy">隱私與對外連線</a></li>
+            <li><a href="#data">圖資與授權</a></li>
+            <li><a href="#limits">已知限制</a></li>
+            <li><a href="#faq">常見問題</a></li>
+        </ol>
+    </nav>
+
+    <main class="hp-main">
+        <h1>📖 使用說明</h1>
+        <p class="hp-lead">台灣旅遊護照用你自己的照片或 Google 時間軸，算出你走過台灣哪些縣市、鄉鎮、村里，並解鎖百岳、車站、離島、國家公園等成就。</p>
+        <div class="hp-box ok">🔒 <b>本機運算：你的照片與位置完全掌握在你手中。</b>所有計算都在你的瀏覽器裡完成，照片、座標、時間不會上傳到任何地方。</div>
+
+        <h2 id="start">1. 開始使用</h2>
+        <ol>
+            <li>在首頁選一種資料來源：<b>照片資料夾</b>、<b>Google 時間軸</b>，或之前匯出的<b>備份檔</b>。</li>
+            <li>等瀏覽器讀完（照片多時會顯示進度與剩餘時間，可以中途取消）。</li>
+            <li>讀完會直接顯示成就頁：探索率、迷霧小地圖、每年新解鎖、成就徽章與集點卡。左側（手機在 ☰ 裡）是成就目錄，點分類可以直接跳過去。</li>
+        </ol>
+        <p>匯入的結果存在這個瀏覽器裡，下次打開網站會自動顯示，不用重新匯入。要加入更多資料，按頂列的「📂 匯入資料」。</p>
+        <p>建議使用電腦版的 Chrome 或 Edge（可以直接選資料夾）；Firefox、Safari 與手機也能用。</p>
+
+        <h2 id="sources">2. 準備資料</h2>
+
+        <h3>📁 照片資料夾</h3>
+        <ul>
+            <li>選放照片的資料夾，會連同所有子資料夾一起讀；也可以直接把資料夾拖曳到卡片上。</li>
+            <li>只讀照片檔頭的 EXIF（GPS 座標、拍攝時間），不讀整張照片。</li>
+            <li>支援 JPG、HEIC、PNG、TIFF 與常見 RAW（CR2、NEF、ARW、DNG 等）；<b>影片目前不支援</b>。</li>
+            <li>沒有 GPS 的照片會略過（手機相機要開啟「位置」才會記錄拍攝地點）。同一張照片的多份備份只算一次。</li>
+        </ul>
+
+        <h3>🗺️ Google 時間軸</h3>
+        <p>Google 地圖的時間軸現在存在手機上，要從手機匯出：</p>
+        <ul>
+            <li><b>Android</b>：手機的「設定」→「位置」→「位置資訊服務」→「時間軸」→「匯出時間軸資料」，得到 <code>Timeline.json</code>。</li>
+            <li><b>iPhone</b>：Google 地圖 App →「你的時間軸」→ 右上角「⋯」→「位置資訊和隱私設定」→「匯出時間軸資料」，得到 <code>location-history.json</code>。</li>
+            <li><b>舊版 Google Takeout</b>：「位置記錄」裡的 <code>Records.json</code>，或「Semantic Location History」資料夾（每月一個 JSON，可以一次選多個檔或把整個資料夾拖進來）。</li>
+        </ul>
+        <p class="hp-note">各版本 App 的選單名稱可能略有不同；找不到時，可以在 Google 地圖說明中心搜尋「匯出時間軸資料」。網站會自動辨識檔案格式。</p>
+        <ul>
+            <li>預設只算<b>停留過的地點</b>；Google 判斷可信度太低的停留點不算。</li>
+            <li>移動時經過的點（例如坐車經過的鄉鎮）預設不算，可以在成就目錄打開「包含移動途中」。</li>
+            <li>只用座標與時間，不保存 Google 標記的地點類型（住家、公司等）。</li>
+        </ul>
+
+        <h3>📦 備份檔</h3>
+        <p>從本網站匯出的 <code>台灣旅遊護照備份-日期.json</code>，見<a href="#backup">換電腦、存到手機</a>。</p>
+
+        <h2 id="rules">3. 成就怎麼計算</h2>
+        <h3>解鎖</h3>
+        <ul>
+            <li>任何一筆紀錄落在範圍內就算解鎖；<b>首次解鎖日期</b>取最早一筆時間正常的紀錄。</li>
+            <li>縣市、鄉鎮、村里依內政部國土測繪中心的村里界線判定；鄉鎮由所在村里推得。</li>
+            <li>山頂 300 公尺內有紀錄算登頂；車站 250 公尺內算到站；景點、B 級景點、極點等依各成就的說明（滑過徽章或打開明細可以看到判定條件）。</li>
+            <li>離島、國家公園與保護區依範圍界線判定（部分沒有界線圖資的改用中心點距離，見<a href="#limits">已知限制</a>）。</li>
+            <li>只算台灣（台澎金馬、東沙、太平島）；國外的紀錄不參與計算。</li>
+        </ul>
+        <h3>照片模式與造訪模式</h3>
+        <table class="hp-table">
+            <thead><tr><th></th><th>照片模式</th><th>造訪模式</th></tr></thead>
+            <tbody>
+                <tr><th>使用的資料</th><td>只有照片</td><td>照片＋時間軸＋手動紀錄</td></tr>
+                <tr><th>預設</th><td>只匯入照片時</td><td>有時間軸或手動紀錄時</td></tr>
+                <tr><th>「老地方」成就</th><td>有（以照片張數計算）</td><td>沒有</td></tr>
+            </tbody>
+        </table>
+        <p>匯入的資料含照片時，頂列會出現切換按鈕。</p>
+        <h3>時間</h3>
+        <ul>
+            <li>日期一律用<b>拍攝當地的時間</b>：照片的拍攝時間本來就是當地時鐘；時間軸依紀錄上的時區換算（只記 UTC 的舊格式一律以台灣時間 UTC+8 計）。</li>
+            <li>沒有拍攝時間、或時間明顯不對（例如 1970 年、未來）的紀錄仍然算解鎖，但不參與和日期有關的成就（每年新解鎖、單日跨縣市等），明細會標「時間不明」。</li>
+            <li>同一個座標、同一個時間的紀錄只算一次（例如同一份資料匯入兩次）。</li>
+        </ul>
+
+        <h2 id="manual">4. 手動紀錄</h2>
+        <p>確實去過、但沒有照片或時間軸的地方，可以手動加入：</p>
+        <ul>
+            <li>地點類成就（極點、離島、景點、國家公園等）：點徽章打開明細，按「<b>我有去過，手動加入！</b>」。</li>
+            <li>百岳、小百岳、車站集點卡：打開明細，在還沒到的山或車站旁按「<b>＋ 我去過</b>」。</li>
+            <li>日期可以不填；不填仍算去過，但不參與和日期有關的成就。</li>
+            <li>山頂、車站、景點的手動紀錄也會解鎖所在的村里；以範圍判定的地點（國家公園、離島等）只解鎖該成就，不解鎖村里。</li>
+            <li>手動紀錄只在造訪模式計入；在照片模式加入時會自動切到造訪模式。</li>
+            <li>要刪除單筆，打開該成就的明細，按那一列的「🗑 刪除」。</li>
+        </ul>
+
+        <h2 id="report">5. 成就報表</h2>
+        <p>按頂列（手機在 ☰ 目錄裡）的「🖼 成就報表」，產生一張可以分享的 PNG 長圖：</p>
+        <ul>
+            <li>可選預設組合（足跡總覽、制霸卡、登山、鐵道、旅人、完整），再自己勾選增減區塊；每個區塊可選要不要顯示未達成的項目。</li>
+            <li>可以填暱稱、隱藏日期、切換迷霧地圖的層級（縣市／鄉鎮／村里）。</li>
+            <li>顏色跟著目前的淺色／深色模式。</li>
+            <li>報表只有地名與日期，<b>不含座標與照片</b>。</li>
+        </ul>
+
+        <h2 id="backup">6. 換電腦、存到手機</h2>
+        <ol>
+            <li>在原本的裝置：首頁「已匯入的資料」→「⬇ 匯出備份」（可以只勾選部分資料）。</li>
+            <li>把檔案傳到另一台裝置（例如用 LINE、雲端硬碟、AirDrop 傳給自己）。</li>
+            <li>在另一台裝置打開網站 →「📦 匯入備份」，選取或拖曳檔案。</li>
+        </ol>
+        <ul>
+            <li>已經有的同一份資料不會重複加入；備份裡的版本比較新時，會先問你要不要取代。</li>
+            <li>手動紀錄會逐筆合併，兩台裝置各自加的都會保留（但在一台刪掉的，另一台不會跟著刪）。</li>
+        </ul>
+        <div class="hp-box warn">⚠️ 備份檔是一般的 JSON 文字檔，<b>含有你的位置紀錄（座標與時間）</b>，請自行保管，不要公開分享。</div>
+
+        <h2 id="privacy">7. 隱私與對外連線</h2>
+        <ul>
+            <li>所有讀取與計算都在你的瀏覽器裡完成；網站沒有後端伺服器，<b>不會收到</b>你的照片、座標或時間。</li>
+            <li>不使用任何追蹤、分析或廣告工具，不設 cookie。</li>
+            <li>匯入結果存在這個瀏覽器的本機儲存空間（IndexedDB），選項存在 localStorage。要刪除：首頁「已匯入的資料」→ 全選 →「🗑 刪除所選」，或清除瀏覽器的網站資料。</li>
+        </ul>
+        <h3>網站會連到哪些地方</h3>
+        <table class="hp-table">
+            <thead><tr><th>對象</th><th>什麼時候</th><th>送出什麼</th></tr></thead>
+            <tbody>
+                <tr><td>本網站（GitHub Pages）</td><td>打開網站、第一次計算時下載圖資</td><td>一般網頁請求；GitHub 會像所有網站一樣看到你的 IP</td></tr>
+                <tr><td>unpkg.com（Leaflet 1.9.4）</td><td>打開網站</td><td>下載地圖套件</td></tr>
+                <tr><td>cdn.jsdelivr.net（exifr 7.1.3）</td><td>讀取照片資料夾時</td><td>下載 EXIF 讀取套件（照片本身不會送出）</td></tr>
+                <tr><td>OpenStreetMap 圖磚</td><td>打開成就明細的小地圖時</td><td>下載地圖圖片；圖磚伺服器會知道你看的地圖範圍與你的 IP</td></tr>
+            </tbody>
+        </table>
+        <p class="hp-note">套件都固定版本。除了上面這些，網站不會連到其他地方。</p>
+
+        <h2 id="data">8. 圖資與授權</h2>
+        <ul>
+            <li>村里、鄉鎮、縣市界線：內政部國土測繪中心（政府資料開放授權條款）</li>
+            <li>國家公園範圍：內政部國家公園署；自然保護區、野生動物保護區與重要棲息環境：農業部林業及自然保育署</li>
+            <li>臺鐵、高鐵、捷運、輕軌車站：交通部（政府資料開放平臺、TDX）；捷運路線色部分取自維基百科</li>
+            <li>山頂與地點座標：Wikidata、© OpenStreetMap 貢獻者（ODbL）</li>
+            <li>地圖圖磚：© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 貢獻者</li>
+            <li>使用的套件：<a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a>（BSD-2）、<a href="https://github.com/MikeKovarik/exifr" target="_blank" rel="noopener">exifr</a>（MIT）</li>
+        </ul>
+
+        <h2 id="limits">9. 已知限制</h2>
+        <ul>
+            <li>落在界線上（約 1 公尺內）的紀錄，偶爾會判到隔壁的村里或剛好在保護區外。</li>
+            <li>約 89 個村里的名稱有罕用字，顯示為「?」（原始圖資的問題）。</li>
+            <li>國家公園圖資缺東沙環礁與金門，改用距離判定（東沙島 2 公里、金門國家公園管理處 500 公尺）；壽山國家自然公園用公園中心 1.5 公里。國家公園範圍只有陸域，在海上拍的照片不算。</li>
+            <li>臺鐵圖資沒有平鎮站，捷運圖資沒有淡水信義線廣慈／奉天宮站，也沒有已停駛的舊站。</li>
+            <li>時間軸的停留點座標是 Google 推測的地點位置，不一定是你實際所在的位置。</li>
+            <li>影片的拍攝地點目前不支援；Google 相簿 Takeout 尚未支援。</li>
+        </ul>
+
+        <h2 id="faq">10. 常見問題</h2>
+        <details class="hp-faq"><summary>我的照片會被上傳嗎？</summary>
+            <p>不會。網站只在你的瀏覽器裡讀取照片檔頭的位置與時間，沒有任何伺服器接收資料。你可以在讀取完成後拔掉網路，成就頁仍然可以使用（明細小地圖的底圖除外）。</p></details>
+        <details class="hp-faq"><summary>明明去過，為什麼某個村里或成就沒有解鎖？</summary>
+            <p>常見原因：照片沒有 GPS（例如相機沒開位置、從通訊軟體存下來的照片會被移除位置）；紀錄剛好在界線附近；時間軸只算停留點（可以打開「包含移動途中」）。確定去過的地點可以用<a href="#manual">手動紀錄</a>補上。</p></details>
+        <details class="hp-faq"><summary>為什麼日期和我記得的差一天？</summary>
+            <p>日期依拍攝當地的時間。若相機的時鐘沒有調整（例如出國後沒改時區、或相機時間本來就不準），照片裡記錄的時間就會有誤差。</p></details>
+        <details class="hp-faq"><summary>換了瀏覽器或清除瀏覽資料後成就不見了？</summary>
+            <p>匯入結果只存在原本的瀏覽器。請重新匯入，或事先用「⬇ 匯出備份」保存一份，之後再「📦 匯入備份」。</p></details>
+        <details class="hp-faq"><summary>照片很多，要讀多久？</summary>
+            <p>主要取決於硬碟（或外接硬碟、NAS）的讀取速度；網站只讀每張照片開頭的一小段，不讀整張。讀取時會顯示剩餘時間，可以隨時取消。</p></details>
+    </main>
+</div>
+
+<footer class="app-foot">
+    <p>🔒 本機運算，資料不會離開你的電腦；不使用追蹤或分析工具。　<a href="./">回到台灣旅遊護照</a></p>
+</footer>
+
+</body>
+</html>

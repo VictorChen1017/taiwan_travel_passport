@@ -13,6 +13,7 @@
 // 所需套件：Leaflet（成就明細的小地圖；沒有載入時不顯示地圖）
 
 import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor } from './shared.js';
+import { TILE } from './tiles.js';
 
 export const GROUP_LABEL = { milestone: '里程碑', conquer: '制霸', pole: '極點', island: '離島', landmark: '景點', bspot: 'B 級景點', peak: '登山', rail: '臺鐵・高鐵', metro: '捷運', lrt: '輕軌', nature: '國家公園與保護區', travel: '旅行' };
 const UNIT_LABEL = { county: '縣市', town: '鄉鎮', village: '村里' };
@@ -830,9 +831,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         box.hidden = false;
         if (!dmap) {
             dmap = L.map(box, { preferCanvas: true, scrollWheelZoom: true, attributionControl: true });
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19, attribution: '&copy; OpenStreetMap', className: 'tiles-osm',   // 深色模式反相
-            }).addTo(dmap);
+            L.tileLayer(TILE.url, TILE.options).addTo(dmap);   // 圖磚設定在 js/tiles.js
             dmapLayer = L.layerGroup().addTo(dmap);
         }
         dmapLayer.clearLayers();

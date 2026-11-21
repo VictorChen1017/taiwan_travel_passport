@@ -476,6 +476,7 @@ function renderToc() {
     toc.innerHTML = `
         <button type="button" class="app-btn toc-import" data-act="import">📂 匯入資料</button>
         <button type="button" class="app-btn toc-report" data-act="report">🖼 成就報表</button>
+        <a class="app-btn toc-report toc-help" href="help.html">❓ 使用說明</a>
         ${hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path" title="時間軸裡移動時經過的點（例如坐車經過的鄉鎮）也算解鎖">
             <input type="checkbox" id="pathToggle"${app.includePath ? ' checked' : ''}> 包含移動途中</label>` : ''}
         <h2>總覽</h2>
