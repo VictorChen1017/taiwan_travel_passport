@@ -12,7 +12,7 @@
 // 與原專案的差異：不顯示照片數；每年新解鎖改為自繪 SVG（不用 Plotly）
 // 所需套件：Leaflet（成就明細的小地圖；沒有載入時不顯示地圖）
 
-import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor } from './shared.js';
+import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor, CONQUER_LEVELS, conquerColor } from './shared.js';
 import { TILE } from './tiles.js';
 
 export const GROUP_LABEL = { milestone: '里程碑', conquer: '制霸', pole: '極點', island: '離島', landmark: '景點', bspot: 'B 級景點', peak: '登山', rail: '臺鐵・高鐵', metro: '捷運', lrt: '輕軌', nature: '國家公園與保護區', travel: '旅行' };
@@ -46,7 +46,10 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 const themeColor = name => window.photoTheme ? window.photoTheme.color(name) : '';
 
 export function createExplore(root, { loadMap, loadDetail, manual: manualApi = null }) {
-    const state = { unit: 'town', metric: 'count', data: null, maps: {}, idx: null };
+    // color：地圖上色 year＝首次解鎖年份、count＝制霸五色（照片張數；只在照片模式的鄉鎮、村里）
+    const state = { unit: 'town', metric: 'count', color: 'year', data: null, maps: {}, idx: null };
+    const canConquer = level => state.data?.mode === 'photo' && level !== 'county';
+    const useConquer = level => state.color === 'count' && canConquer(level);
     let built = false;
 
     // ---------- 資料整理 ----------
@@ -147,6 +150,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         let rt = null;
         window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => state.data && renderYearly(), 150); });
         bindInlineMap();
+        bindColorSwitch(root.querySelector('#ex-legend'));
     }
 
     function update() {
@@ -335,7 +339,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         for (const p of m.paths) {
             const item = idx.get(p.code);
             const on = item && (level === 'village' || item.unlocked);
-            const fill = on && item.first ? yearColor(new Date(item.first * 1000).getUTCFullYear(), y0, y1) : on ? '#ffcfb5' : null;
+            const fill = !on ? null : useConquer(level) ? conquerColor(item.n || 0)
+                : item.first ? yearColor(new Date(item.first * 1000).getUTCFullYear(), y0, y1) : '#ffcfb5';
             parts[on ? 'on' : 'off'].push(`<path d="${p.d}" data-code="${p.code}" class="${on ? 'on' : 'off'}"${fill ? ` style="fill:${fill}"` : ''}/>`);
         }
         svg.setAttribute('viewBox', m.viewBox);
@@ -343,12 +348,31 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         svg.innerHTML = `<g class="ex-fog">${parts.off.join('')}</g><g class="ex-clear">${parts.on.join('')}</g>`;
         svg._names = new Map(m.paths.map(p => [p.code, p.name]));
         svg._level = level;
+        svg._color = useConquer(level) ? 'count' : 'year';
         return [y0, y1];
     }
 
-    const legendHtml = (y0, y1) => `
-        <span class="ex-legend-item"><i class="sw fog"></i>未解鎖（迷霧）</span>
-        <span class="ex-legend-item"><i class="sw grad"></i>已解鎖：${y0} 年${y0 === EARLY_YEAR ? '前' : ''} → ${y1} 年（首次解鎖年份）</span>`;
+    // 圖例；照片模式的鄉鎮、村里前面加上色切換（年份／制霸五色）
+    const legendHtml = (y0, y1, level) => {
+        const sw = canConquer(level) ? `<span class="ex-seg ex-color-seg" role="group" aria-label="地圖上色">
+            <button type="button" data-color="year" class="${useConquer(level) ? '' : 'active'}">首次解鎖年份</button>
+            <button type="button" data-color="count" class="${useConquer(level) ? 'active' : ''}">制霸五色</button></span>` : '';
+        const fog = '<span class="ex-legend-item"><i class="sw fog"></i>未解鎖（迷霧）</span>';
+        if (useConquer(level)) return sw + fog + CONQUER_LEVELS.map(l =>
+            `<span class="ex-legend-item"><i class="sw lv" style="background:${l.color}"></i>${l.label}</span>`).join('');
+        return sw + fog + `<span class="ex-legend-item"><i class="sw grad"></i>已解鎖：${y0} 年${y0 === EARLY_YEAR ? '前' : ''} → ${y1} 年（首次解鎖年份）</span>`;
+    };
+
+    // 點圖例的上色切換：小地圖、放大彈窗一起換（彈窗保留縮放位置）
+    function bindColorSwitch(el) {
+        el.addEventListener('click', e => {
+            const b = e.target.closest('[data-color]');
+            if (!b || b.dataset.color === state.color) return;
+            state.color = b.dataset.color;
+            renderMap();
+            if (modal && !modal.hidden) recolorModal();
+        });
+    }
 
     // 內嵌小地圖：縣市、鄉鎮直接顯示；村里太細，只放一個開啟大圖的按鈕
     async function renderMap() {
@@ -380,7 +404,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (level !== state.unit) return; // 載入期間又切換了單位
         loading.hidden = true;
         const [y0, y1] = drawMap(svg, m, level);
-        root.querySelector('#ex-legend').innerHTML = legendHtml(y0, y1);
+        root.querySelector('#ex-legend').innerHTML = legendHtml(y0, y1, level);
     }
 
     // 滑過顯示名稱與首次解鎖日期
@@ -396,7 +420,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             const item = state.idx[svg._level].get(code);
             const on = item && (svg._level === 'village' || item.unlocked);
             const name = svg._names?.get(code) || code;
-            tip.innerHTML = `<b>${esc(name)}</b><br>${on ? `首次解鎖 ${fmtDate(item.first)}` : '未解鎖'}`;
+            tip.innerHTML = `<b>${esc(name)}</b><br>${on ? `首次解鎖 ${fmtDate(item.first)}${item.n ? `<br>照片 ${fmtInt(item.n)} 張` : ''}` : '未解鎖'}`;
             const r = wrap.getBoundingClientRect();
             tip.style.left = Math.max(4, Math.min(cx - r.left + 14, r.width - 200)) + 'px';
             tip.style.top = Math.max(4, Math.min(cy - r.top + 14, r.height - 50)) + 'px';
@@ -441,13 +465,22 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 <div class="ex-legend ex-modal-legend"></div>
             </div>`;
         document.body.appendChild(modal);
+        bindColorSwitch(modal.querySelector('.ex-modal-legend'));
 
         const svg = modal.querySelector('svg');
         const body = modal.querySelector('.ex-modal-body');
         bindHover(svg, modal.querySelector('.ex-tip'), body);
 
         const tip = modal.querySelector('.ex-tip');
-        const setVb = v => { svg._vb = v; svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`); };
+        // 拖曳、縮放的邊界：全圖（台澎金馬外框）放大 1.5 倍；視窗比邊界小時不能拖出去，比邊界大時置中
+        const clampVb = v => {
+            const b = svg._base;
+            if (!b) return v;
+            const B = { x: b.x - b.w * 0.25, y: b.y - b.h * 0.25, w: b.w * 1.5, h: b.h * 1.5 };
+            const fit1 = (pos, len, lo, span) => len >= span ? lo + (span - len) / 2 : Math.min(lo + span - len, Math.max(lo, pos));
+            return { ...v, x: fit1(v.x, v.w, B.x, B.w), y: fit1(v.y, v.h, B.y, B.h) };
+        };
+        const setVb = v => { v = clampVb(v); svg._vb = v; svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`); };
         // 螢幕座標 → 地圖座標（preserveAspectRatio=meet：取較大的縮放比，並扣掉置中留白）
         const fit = v => {
             const r = svg.getBoundingClientRect();
@@ -574,7 +607,10 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         modal.querySelector('.ex-tip').hidden = true;
         modal.hidden = false;
         document.body.classList.add('ex-modal-open');
-        if (svg._level === level && svg._data === state.data) return; // 已畫過同一層級與資料，保留縮放位置
+        if (svg._level === level && svg._data === state.data) {   // 已畫過同一層級與資料，保留縮放位置
+            if (svg._color !== (useConquer(level) ? 'count' : 'year')) recolorModal();
+            return;
+        }
         svg.innerHTML = '';
         modal.querySelector('.ex-modal-legend').innerHTML = '';
         loading.hidden = false;
@@ -592,7 +628,17 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const [x, y, w, h] = m.viewBox.split(' ').map(Number);
         svg._base = { x, y, w, h };
         svg._goRegion(DEFAULT_REGION);
-        modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1);
+        modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1, level);
+    }
+
+    // 放大彈窗換上色方式：重畫區域，保留目前的縮放位置
+    async function recolorModal() {
+        const svg = modal.querySelector('svg'), level = svg._level, vb = svg._vb;
+        if (!level) return;
+        const m = await getMap(level);
+        const [y0, y1] = drawMap(svg, m, level);
+        if (vb) svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+        modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1, level);
     }
 
     function closeModal() {

@@ -65,3 +65,18 @@ export function yearColor(year, y0, y1) {
 }
 export const YEAR_COLOR_FROM = 'rgb(255,226,205)', YEAR_COLOR_TO = 'rgb(232,74,23)', UNKNOWN_YEAR_COLOR = '#ffcfb5';
 export const YEARLY_BAR_COLOR = '#ff8a5c';   // 每年新解鎖長條
+
+// 制霸五色（照片模式，鄉鎮・村里）：依照片張數上色；0 張＝迷霧（主題色 --c-fog）
+// min：達到這個張數起用這個顏色；label：圖例的張數區間
+export const CONQUER_LEVELS = [
+    { min: 1, color: '#ffffff', label: '1–9 張' },
+    { min: 10, color: '#4a90e2', label: '10–49 張' },
+    { min: 50, color: '#43a047', label: '50–99 張' },
+    { min: 100, color: '#fb8c00', label: '100–499 張' },
+    { min: 500, color: '#e53935', label: '500 張以上' },
+];
+export function conquerColor(n) {
+    let c = null;
+    for (const l of CONQUER_LEVELS) if (n >= l.min) c = l.color;
+    return c;
+}

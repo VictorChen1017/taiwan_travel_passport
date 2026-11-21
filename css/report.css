@@ -110,6 +110,28 @@
     cursor: pointer;
 }
 
+/* 隱私控制：放在選項最上方，框起來 */
+.rp-privacy {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 10px 12px 12px;
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+}
+
+.rp-privacy legend {
+    padding: 0 4px;
+    font-weight: bold;
+    color: var(--c-text-strong);
+}
+
+.rp-privacy [hidden] {
+    display: none;
+}
+
 .rp-blocks-title {
     margin-top: 4px;
     font-weight: bold;

@@ -2,7 +2,7 @@
 // 改寫自原專案 dashboard/explore_stats.php（規格見 docs/SPEC.md §3、§6）
 //
 // 與原專案的差異：
-// - 不輸出照片數（統計只看首次解鎖時間）；以張數計算的成就（regular 老地方）只在照片模式出現
+// - 照片數只在照片模式輸出到鄉鎮、村里的 n（給「制霸五色」上色）；其餘統計只看首次解鎖時間；以張數計算的成就（regular 老地方）只在照片模式出現
 // - 鄉鎮由村里代碼前 8 碼推得
 // - 文字「拍照」改為「有足跡」，「張」改為「筆」（照片模式的老地方除外）
 
@@ -118,7 +118,7 @@ export function compute(R, S, opts = {}) {
         b[0]++; b[2] += v.area; villTotalArea += v.area;
         if (villN[i] > 0) {
             b[1]++; b[3] += v.area; villUnlockedArea += v.area;
-            villages.push({ code: v.code, town: v.town, name: v.name, area: v.area, first: villFirst[i] });
+            villages.push({ code: v.code, town: v.town, name: v.name, area: v.area, first: villFirst[i], ...(mode === 'photo' ? { n: villN[i] } : {}) });
         }
     });
 
@@ -129,6 +129,7 @@ export function compute(R, S, opts = {}) {
         const unlocked = townN[i] > 0;
         const vb = villByTown.get(i) || [0, 0, 0, 0];
         towns.push({ code: t.code, county: t.county, name: t.name, area: t.area, first: townFirst[i], unlocked,
+                     ...(mode === 'photo' ? { n: townN[i] } : {}),
                      villages: vb[0], villages_unlocked: vb[1],
                      village_area: round(vb[2], 3), village_area_unlocked: round(vb[3], 3) });
         townTotalArea += t.area;

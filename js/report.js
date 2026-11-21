@@ -2,7 +2,8 @@
 //
 // - 全部在瀏覽器內用 Canvas 2D 繪製，不經伺服器；報表只放彙總結果（地名、日期），不含座標與照片
 // - 顏色依當下的淺色／深色主題（介面色取 css/theme.css 的 --c-*，資料色取 js/shared.js）
-// - 預設組合用選單切換，之後可以自己勾選區塊；每個區塊可選「顯示未達成」；可隱藏日期、填暱稱
+// - 預設組合用選單切換，之後可以自己勾選區塊；每個區塊可選「顯示未達成」；可填暱稱
+// - 隱私控制：隱藏日期、隱藏「老地方」、迷霧地圖最細到鄉鎮；照片模式的鄉鎮・村里地圖可選「制霸五色」
 //
 // 用法：
 //   const rp = createReport({ getStats: () => stats, loadMap: level => Promise<{viewBox, paths}>, getMeta: () => ({ from, to, mode, manual }) });
@@ -11,7 +12,7 @@
 // 繪製分兩次：先「量」（dry，只算高度），再依總高度建立畫布真正畫出來
 
 import { GROUP_LABEL, POINT_STAMPS } from './explore.js';
-import { GROUP_COLOR, ICONS, shapeOf, badgeColors, yearColor, EARLY_YEAR, YEAR_COLOR_FROM, YEAR_COLOR_TO, UNKNOWN_YEAR_COLOR, YEARLY_BAR_COLOR } from './shared.js';
+import { GROUP_COLOR, ICONS, shapeOf, badgeColors, yearColor, EARLY_YEAR, YEAR_COLOR_FROM, YEAR_COLOR_TO, UNKNOWN_YEAR_COLOR, YEARLY_BAR_COLOR, CONQUER_LEVELS, conquerColor } from './shared.js';
 
 const W = 1080, PAD = 44, CW = W - PAD * 2;   // 圖寬、外邊距、內容寬
 const CARD_PAD = 26;
@@ -160,11 +161,12 @@ function gridCols(width, minW, gap) {
 
 /**
  * 畫整張報表（g.dry 時只量）；回傳總高度
- * @param o 選項 { blocks: Set, missing: Set, hideDates, nickname, mapLevel }
+ * @param o 選項 { blocks: Set, missing: Set, hideDates, hideRegular, townMax, nickname, mapLevel, mapColor }
  * @param env { stats, meta, maps: { level: {viewBox, paths} } }
  */
 function paint(g, o, env) {
     const { stats } = env;
+    o = { ...o, mapLevel: mapLevelOf(o), mapColor: mapColorOf(o, stats) };
     const C = g.c;
     const date = t => o.hideDates ? null : t ? fmtDate(t) : '時間不明';
     let y = PAD;
@@ -184,7 +186,7 @@ function paint(g, o, env) {
     y += 14;
 
     // ---------- 區塊 ----------
-    const ach = stats.achievements;
+    const ach = o.hideRegular ? stats.achievements.filter(a => a.id !== 'regular') : stats.achievements;
     const blocks = BLOCKS.filter(b => o.blocks.has(b.id));
     for (const b of blocks) {
         const showMissing = !!b.missing && o.missing.has(b.id);
@@ -245,6 +247,12 @@ function paintSummary(g, y, { env, ach }) {
 
 // ---------- 迷霧地圖 ----------
 
+/** 實際使用的地圖層級：勾「最細到鄉鎮」時村里改用鄉鎮 */
+export const mapLevelOf = o => o.townMax && o.mapLevel === 'village' ? 'town' : o.mapLevel;
+/** 實際使用的上色：制霸五色只在照片模式的鄉鎮、村里 */
+const canConquer = (level, stats) => stats?.mode === 'photo' && level !== 'county';
+export const mapColorOf = (o, stats) => o.mapColor === 'count' && canConquer(mapLevelOf(o), stats) ? 'count' : 'year';
+
 function unlockedIndex(stats, level) {
     const list = level === 'county' ? stats.counties : level === 'town' ? stats.towns : stats.villages;
     return new Map(list.filter(x => level === 'village' || x.unlocked).map(x => [x.code, x]));
@@ -253,7 +261,8 @@ function unlockedIndex(stats, level) {
 function paintMap(g, y, { o, env }) {
     const level = o.mapLevel, m = env.maps[level], C = g.c;
     const idx = unlockedIndex(env.stats, level);
-    return card(g, y, { title: `迷霧地圖（${UNIT_LABEL[level]}）`, right: `已解鎖 ${idx.size.toLocaleString()} 個` }, (x, y0, w) => {
+    const conquer = o.mapColor === 'count';
+    return card(g, y, { title: `迷霧地圖（${UNIT_LABEL[level]}${conquer ? '・制霸五色' : ''}）`, right: `已解鎖 ${idx.size.toLocaleString()} 個` }, (x, y0, w) => {
         if (!m) return empty(g, x, y0, '地圖載入中…');
         const [vx, vy, vw, vh] = m.viewBox.split(/[\s,]+/).map(Number);
         const scale = Math.min(w / vw, 1150 / vh);
@@ -276,7 +285,8 @@ function paintMap(g, y, { o, env }) {
                     const it = idx.get(p.code);
                     if (!!it !== pass) continue;
                     const pp = path(p.d);
-                    ctx.fillStyle = it ? (it.first ? yearColor(yearOf(it.first), y0y, y1) : UNKNOWN_YEAR_COLOR) : C.fog;
+                    ctx.fillStyle = !it ? C.fog : conquer ? conquerColor(it.n || 0) || C.fog
+                        : it.first ? yearColor(yearOf(it.first), y0y, y1) : UNKNOWN_YEAR_COLOR;
                     ctx.fill(pp);
                     ctx.stroke(pp);
                 }
@@ -287,6 +297,13 @@ function paintMap(g, y, { o, env }) {
         let ly = y0 + mh + 18;
         g.rect(x, ly + 2, 18, 18, { fill: C.fog, r: 3 });
         let lx = x + 26 + g.text('未解鎖', x + 26, ly, { size: 16, color: C.muted }) + 28;
+        if (conquer) {
+            for (const l of CONQUER_LEVELS) {
+                g.rect(lx, ly + 2, 18, 18, { fill: l.color, stroke: C.border, r: 3 });
+                lx += 26 + g.text(l.label, lx + 26, ly, { size: 16, color: C.muted }) + 22;
+            }
+            return ly + 26;
+        }
         if (!g.dry) {
             const grad = g.ctx.createLinearGradient(lx, 0, lx + 120, 0);
             grad.addColorStop(0, YEAR_COLOR_FROM); grad.addColorStop(1, YEAR_COLOR_TO);
@@ -591,8 +608,14 @@ function loadPref() {
 function savePref(o) {
     try {
         localStorage.setItem(PREF_KEY, JSON.stringify({ preset: o.preset, blocks: [...o.blocks], missing: [...o.missing],
-            hideDates: o.hideDates, nickname: o.nickname, mapLevel: o.mapLevel }));
+            hideDates: o.hideDates, hideRegular: o.hideRegular, townMax: o.townMax, nickname: o.nickname, mapLevel: o.mapLevel, mapColor: o.mapColor }));
     } catch (e) { /* 存不了只影響下次 */ }
+}
+
+// 手機（觸控）且瀏覽器能分享檔案：按鈕改為「分享到 IG／Threads」，叫出系統分享選單；電腦一律下載
+function canShareFile(file = new File([''], 'a.png', { type: 'image/png' })) {
+    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    try { return !!(touch && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
 }
 
 const presetBlocks = id => new Set((PRESETS.find(p => p.id === id) || PRESETS[0]).blocks);
@@ -606,6 +629,9 @@ export function createReport({ getStats, loadMap, getMeta }) {
         blocks: p.blocks ? new Set(p.blocks) : presetBlocks('overview'),
         missing: p.missing ? new Set(p.missing) : defaultMissing(),
         hideDates: !!p.hideDates,
+        hideRegular: p.hideRegular ?? true,
+        townMax: p.townMax ?? true,
+        mapColor: p.mapColor || 'year',
         nickname: p.nickname || '',
         mapLevel: p.mapLevel || 'town',
     };
@@ -624,13 +650,20 @@ export function createReport({ getStats, loadMap, getMeta }) {
                 </div>
                 <div class="rp-main">
                     <div class="rp-opts">
+                        <fieldset class="rp-privacy">
+                            <legend>🔒 隱私控制</legend>
+                            <label class="rp-check"><input type="checkbox" id="rp-hide"> 隱藏日期</label>
+                            <label class="rp-check" id="rp-regular-row"><input type="checkbox" id="rp-regular"> 隱藏「老地方」</label>
+                            <label class="rp-check"><input type="checkbox" id="rp-townmax"> 迷霧地圖最細到鄉鎮</label>
+                            <label class="rp-field" id="rp-color-row">地圖上色
+                                <select id="rp-color"><option value="year">首次解鎖年份</option><option value="count">制霸五色（照片張數，看得出常去的地方）</option></select></label>
+                        </fieldset>
                         <label class="rp-field">預設組合
                             <select id="rp-preset">${PRESETS.map(x => `<option value="${x.id}">${x.label}</option>`).join('')}<option value="custom">自訂</option></select></label>
                         <label class="rp-field">暱稱（選填）
                             <input type="text" id="rp-nick" maxlength="24" placeholder="例如：小明的足跡"></label>
                         <label class="rp-field">迷霧地圖、每年新解鎖
                             <select id="rp-level"><option value="county">縣市</option><option value="town">鄉鎮</option><option value="village">村里</option></select></label>
-                        <label class="rp-check"><input type="checkbox" id="rp-hide"> 隱藏日期</label>
                         <div class="rp-blocks-title">區塊 <small>右欄勾選＝顯示未達成</small></div>
                         <ul class="rp-blocks" id="rp-blocks">${BLOCKS.map(b => `
                             <li><label class="rp-check"><input type="checkbox" data-block="${b.id}"> ${esc(b.label)}</label>
@@ -645,7 +678,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
                 <div class="rp-foot">
                     <span class="rp-size" id="rp-size"></span>
                     <button type="button" class="rp-btn" data-act="close">關閉</button>
-                    <button type="button" class="rp-btn primary" id="rp-save">⬇ 下載 PNG</button>
+                    <button type="button" class="rp-btn primary" id="rp-save">${canShareFile() ? '📤 分享到 IG／Threads' : '⬇ 下載 PNG'}</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -662,8 +695,11 @@ export function createReport({ getStats, loadMap, getMeta }) {
             syncForm(); schedule();
         });
         $('rp-nick').addEventListener('input', e => { o.nickname = e.target.value; schedule(400); });
-        $('rp-level').addEventListener('change', e => { o.mapLevel = e.target.value; schedule(); });
+        $('rp-level').addEventListener('change', e => { o.mapLevel = e.target.value; syncForm(); schedule(); });
         $('rp-hide').addEventListener('change', e => { o.hideDates = e.target.checked; schedule(); });
+        $('rp-regular').addEventListener('change', e => { o.hideRegular = e.target.checked; schedule(); });
+        $('rp-townmax').addEventListener('change', e => { o.townMax = e.target.checked; syncForm(); schedule(); });
+        $('rp-color').addEventListener('change', e => { o.mapColor = e.target.value; schedule(); });
         $('rp-blocks').addEventListener('change', e => {
             const t = e.target;
             if (t.dataset.block) { t.checked ? o.blocks.add(t.dataset.block) : o.blocks.delete(t.dataset.block); o.preset = 'custom'; }
@@ -681,8 +717,16 @@ export function createReport({ getStats, loadMap, getMeta }) {
         if (o.preset === 'custom' && same) o.preset = same.id;
         $('rp-preset').value = o.preset;
         $('rp-nick').value = o.nickname;
-        $('rp-level').value = o.mapLevel;
+        $('rp-level').value = mapLevelOf(o);
+        $('rp-level').querySelector('option[value="village"]').disabled = o.townMax;
         $('rp-hide').checked = o.hideDates;
+        $('rp-regular').checked = o.hideRegular;
+        $('rp-townmax').checked = o.townMax;
+        const stats = getStats();
+        $('rp-regular-row').hidden = stats?.mode !== 'photo';   // 老地方只在照片模式
+        $('rp-color-row').hidden = stats?.mode !== 'photo';
+        $('rp-color').value = o.mapColor;
+        $('rp-color').disabled = !(o.blocks.has('map') && canConquer(mapLevelOf(o), stats));
         modal.querySelectorAll('[data-block]').forEach(b => { b.checked = o.blocks.has(b.dataset.block); });
         modal.querySelectorAll('[data-miss]').forEach(b => {
             b.checked = o.missing.has(b.dataset.miss);
@@ -711,8 +755,9 @@ export function createReport({ getStats, loadMap, getMeta }) {
         }
         $('rp-status').hidden = false;
         $('rp-status').textContent = '產生中…';
-        if (o.blocks.has('map') && !maps[o.mapLevel]) {
-            try { maps[o.mapLevel] = await loadMap(o.mapLevel); } catch (e) { /* 地圖載入失敗時區塊顯示「載入中」 */ }
+        const level = mapLevelOf(o);
+        if (o.blocks.has('map') && !maps[level]) {
+            try { maps[level] = await loadMap(level); } catch (e) { /* 地圖載入失敗時區塊顯示「載入中」 */ }
         }
         const stats = getStats();
         if (!stats) return;
@@ -735,8 +780,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
         if (!blob) { alert('無法產生圖片（可能是內容太長），請減少區塊後再試。'); return; }
         const filename = `台灣旅遊護照成就報表-${todayStr()}.png`;
         const file = new File([blob], filename, { type: 'image/png' });
-        const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-        if (touch && navigator.canShare && navigator.canShare({ files: [file] })) {
+        if (canShareFile(file)) {
             try { await navigator.share({ files: [file], title: filename }); return; }
             catch (e) { if (e.name === 'AbortError') return; }
         }

@@ -296,6 +296,20 @@
     background: linear-gradient(90deg, rgb(255, 226, 205), rgb(232, 74, 23));
 }
 
+/* 制霸五色的色塊：白色要有外框才看得見 */
+.ex-legend .sw.lv {
+    width: 14px;
+    box-shadow: inset 0 0 0 1px var(--c-border);
+}
+
+/* 圖例前的上色切換（年份／制霸五色） */
+.ex-color-seg button {
+    min-width: 0;
+    height: 24px;
+    padding: 0 10px;
+    font-size: calc(12px * var(--fs, 1));
+}
+
 /* ---------- 探索率 ---------- */
 
 .ex-donut-svg {

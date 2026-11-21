@@ -360,20 +360,21 @@ a.app-btn {
     color: var(--c-link);
 }
 
-/* 目錄的「使用說明」只在窄畫面（頂列放不下）時出現 */
-.app-toc .toc-help {
-    display: none;
-}
-
-@media (max-width: 640px) {
-    .app-toc .toc-help { display: block; }
-}
 
 .app-toc .toc-report {
     display: block;
     width: 100%;
     margin: -6px 0 14px;
     text-align: center;
+}
+
+/* 目錄的「使用說明」只在窄畫面（頂列放不下）時出現；它也有 .toc-report，所以寫在 .toc-report 後面並加重選擇器，才不會被 display: block 蓋掉 */
+.app-toc .toc-report.toc-help {
+    display: none;
+}
+
+@media (max-width: 640px) {
+    .app-toc .toc-report.toc-help { display: block; }
 }
 
 /* ---------- 匯入引導 ---------- */
