@@ -226,7 +226,7 @@ async function addPhone(src) {
         await saveSource(src);
         renderSources();
         await compute();
-        return src.records.lat.length;
+        return { added: src.records.lat.length, dup: 0, total: src.records.lat.length };
     }
     const A = old.records, B = src.records;
     const seen = new Set();
@@ -240,7 +240,7 @@ async function addPhone(src) {
         lat.push(B.lat[i]); lng.push(B.lng[i]); time.push(B.time[i]);
     }
     const added = lat.length - A.lat.length;
-    if (!added) return 0;
+    if (!added) return { added: 0, dup, total: A.lat.length };
     // 統計：檔案數類的累加；時間範圍、台灣範圍內、沒有時間的張數依合併後重算
     const a = old.stats || {}, b = src.stats || {};
     const sum = k => (a[k] || 0) + (b[k] || 0);
@@ -260,7 +260,7 @@ async function addPhone(src) {
     await saveSource(old);
     renderSources();
     await compute();
-    return added;
+    return { added, dup, total: lat.length };
 }
 
 /** 照片資料夾：取得檔案清單 → 解析 EXIF → 加入來源；phone 為 true 時追加進「手機照片」 */
@@ -291,7 +291,20 @@ async function importFolder(getItems, name, { phone = false } = {}) {
             return;
         }
         if (phone) {
-            if (!await addPhone(src)) alert('這些照片的足跡都已經加入過了，沒有新增。');
+            const r = await addPhone(src), st = src.stats;
+            const dup = (st.duplicates || 0) + r.dup, other = (st.videos || 0) + (st.other || 0);
+            const msg = [
+                r.added ? `✅ 已加入 ${n0(r.added)} 筆新的足跡` : '這些照片的足跡都已經加入過了，沒有新增。',
+                '',
+                `這次選了 ${n0(st.files)} 個檔案：`,
+                `・有座標 ${n0(src.records.lat.length + (st.duplicates || 0))} 張${dup ? `（其中 ${n0(dup)} 張之前加過或重複，不再加入）` : ''}`,
+                st.noGps ? `・沒有 GPS ${n0(st.noGps)} 張（略過）` : '',
+                st.failed ? `・無法讀取 ${n0(st.failed)} 張` : '',
+                other ? `・影片或其他檔案 ${n0(other)} 個（略過）` : '',
+                '',
+                `「手機照片」目前共 ${n0(r.total)} 筆足跡。`,
+            ].filter((s, i, a) => s || (i > 0 && a[i - 1])).join('\n');
+            setTimeout(() => alert(msg), 50);
         } else await addSource(src);
     } catch (e) {
         busy(null);
