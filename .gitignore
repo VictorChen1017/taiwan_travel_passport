@@ -2,3 +2,7 @@
 .env
 # 個人測試資料（照片、時間軸），絕不能進 repo
 test/
+
+# Claude Code 的專案說明（含本機路徑與工作習慣，不公開）
+CLAUDE.md
+CLAUDE.local.md

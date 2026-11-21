@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自動檢查（開發用）</title>
+<link rel="stylesheet" href="../css/theme.css">
+<script src="../js/theme.js"></script>
+<style>
+  body { margin: 16px; font: 14px/1.5 "Microsoft JhengHei", system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .muted { color: var(--c-text-muted); }
+  table { border-collapse: collapse; margin-top: 10px; }
+  td, th { border: 1px solid var(--c-border); padding: 3px 8px; text-align: left; vertical-align: top; }
+  .ok { color: var(--c-success); font-weight: bold; }
+  .bad { color: var(--c-danger); font-weight: bold; }
+  #sum { margin-top: 8px; font-size: 16px; }
+</style>
+</head>
+<body>
+<h1>自動檢查（開發用）</h1>
+<p class="muted">只檢查會影響後續開發的核心功能：計算、手動紀錄、備份、報表產生。介面與使用體驗由維護者實際使用時確認。<br>
+需要 <code>test/legacy/photos.json</code>（原專案照片，git 忽略）；請用 <code>python tools/dev_server.py</code> 開啟。<br>
+基準值（村里 1,287 等）來自 2026-11-21 的圖資；重新匯出圖資或修改成就設定後，數字不同時要確認是否為預期，再更新 <code>dev/selftest.js</code> 的 BASE。</p>
+<div id="sum">執行中…</div>
+<table><thead><tr><th>分類</th><th>檢查</th><th>結果</th><th>說明</th><th>毫秒</th></tr></thead><tbody id="rows"></tbody></table>
+<script type="module" src="./selftest.js"></script>
+</body>
+</html>

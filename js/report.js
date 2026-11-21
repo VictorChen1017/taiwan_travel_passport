@@ -21,7 +21,7 @@ const MAX_HEIGHT = 30000;   // 瀏覽器畫布高度上限（Chrome 約 32,767�
 // ---------- 區塊與預設組合 ----------
 
 // missing：可勾「顯示未達成」；missingOn：預設就顯示未達成
-const BLOCKS = [
+export const BLOCKS = [
     { id: 'summary', label: '探索率摘要' },
     { id: 'map', label: '迷霧地圖' },
     { id: 'yearly', label: '每年新解鎖' },
@@ -39,7 +39,7 @@ const BLOCKS = [
     { id: 'nature', label: '國家公園與保護區', missing: true },
     { id: 'travel', label: '旅行', missing: true },
 ];
-const PRESETS = [
+export const PRESETS = [
     { id: 'overview', label: '足跡總覽', blocks: ['summary', 'map', 'yearly', 'conquer'] },
     { id: 'conquer', label: '制霸卡', blocks: ['conquer', 'villages', 'milestone'] },
     { id: 'peak', label: '登山', blocks: ['summary', 'peak'] },
