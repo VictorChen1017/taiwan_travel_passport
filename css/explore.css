@@ -1195,6 +1195,38 @@ body.ex-modal-open {
     color: var(--c-text-muted);
 }
 
+/* 地區切換（本島／金門／馬祖／全部） */
+.ex-modal-regions {
+    display: inline-flex;
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.ex-modal-regions button {
+    height: 32px;
+    padding: 0 12px;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 0;
+    border-left: 1px solid var(--c-border);
+    cursor: pointer;
+}
+
+.ex-modal-regions button:first-child {
+    border-left: 0;
+}
+
+.ex-modal-regions button:hover {
+    background: var(--c-surface-3);
+}
+
+.ex-modal-regions button.active {
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+}
+
 .ex-modal-tools {
     display: flex;
     gap: 6px;
@@ -1504,6 +1536,33 @@ body.ex-modal-open {
     background: var(--c-surface-2);
     border: 1px solid var(--c-accent);
     border-radius: 8px;
+}
+
+/* 集點卡明細最上方的「手動加入車站／山」 */
+.ex-mpick-box {
+    padding: 10px 14px 4px;
+}
+
+.ex-mpick input[type="search"] {
+    padding: 6px 8px;
+    font: inherit;
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 6px;
+}
+
+.ex-mpick-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.ex-mpick-list small {
+    width: 100%;
+    color: var(--c-text-muted);
 }
 
 .ex-mform-title {

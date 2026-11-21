@@ -22,6 +22,19 @@ const COMPACT_GROUPS = new Set(['island', 'landmark', 'bspot', 'nature']);   // 
 // 以座標格子計的集點卡（百岳、鐵道車站）：單位與「達成」的說法；明細 id 前綴
 const STATION_STAMP = { unit: '站', verb: '到站', prefix: 'rail_' };
 export const POINT_STAMPS = { peak: { unit: '座', verb: '登頂', prefix: 'peaks_' }, rail: STATION_STAMP, metro: STATION_STAMP, lrt: STATION_STAMP };
+// 迷霧地圖彈窗：地區切換。座標是 data/map_*.json 的 SVG 座標：x＝經度 × MAP_KX、y＝－緯度（tools/export_static.php）
+const MAP_KX = 0.9135;
+const REGIONS = {
+    main: { label: '本島', box: [119.25, 21.85, 122.1, 25.4] },   // [西經, 南緯, 東經, 北緯]；含澎湖、綠島、蘭嶼
+    kinmen: { label: '金門', box: [118.1, 24.33, 118.55, 24.58] },
+    matsu: { label: '馬祖', box: [119.85, 25.9, 120.55, 26.44] },
+    all: { label: '全部', box: null },
+};
+const DEFAULT_REGION = 'main';
+const regionBox = ([w, s, e, n]) => ({ x: w * MAP_KX, y: -n, w: (e - w) * MAP_KX, h: n - s });
+// 放大上限：視窗最窄 0.15 地圖單位（約 16 公里寬，一個鄉鎮大致佔滿手機畫面）；再放大會看出界線簡化（約 200 公尺）的瑕疵
+const MIN_VIEW_W = 0.15;
+const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 const isPointDetail = id => Object.values(POINT_STAMPS).some(p => id.startsWith(p.prefix));
 
 const pad = n => String(n).padStart(2, '0');
@@ -399,7 +412,9 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             <div class="ex-modal-box" role="dialog" aria-modal="true" aria-labelledby="ex-modal-title">
                 <div class="ex-modal-head">
                     <span id="ex-modal-title" class="ex-modal-title"></span>
-                    <span class="ex-modal-hint">滾輪縮放・拖曳移動・雙擊放大</span>
+                    <span class="ex-modal-hint">${COARSE ? '雙指縮放・拖曳移動・連點放大' : '滾輪縮放・拖曳移動・雙擊放大'}</span>
+                    <span class="ex-modal-regions" role="group" aria-label="地區">${Object.entries(REGIONS).map(([k, r]) =>
+                        `<button type="button" data-region="${k}">${r.label}</button>`).join('')}</span>
                     <span class="ex-modal-tools">
                         <button type="button" data-act="in" title="放大">＋</button>
                         <button type="button" data-act="out" title="縮小">－</button>
@@ -420,50 +435,115 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const body = modal.querySelector('.ex-modal-body');
         bindHover(svg, modal.querySelector('.ex-tip'), body);
 
+        const tip = modal.querySelector('.ex-tip');
         const setVb = v => { svg._vb = v; svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`); };
         // 螢幕座標 → 地圖座標（preserveAspectRatio=meet：取較大的縮放比，並扣掉置中留白）
-        const toSvg = (cx, cy) => {
-            const r = svg.getBoundingClientRect(), v = svg._vb;
+        const fit = v => {
+            const r = svg.getBoundingClientRect();
             const s = Math.max(v.w / r.width, v.h / r.height);
-            const ox = (r.width - v.w / s) / 2, oy = (r.height - v.h / s) / 2;
+            return { r, s, ox: (r.width - v.w / s) / 2, oy: (r.height - v.h / s) / 2 };
+        };
+        const toSvg = (cx, cy, v = svg._vb) => {
+            const { r, s, ox, oy } = fit(v);
             return { x: v.x + (cx - r.left - ox) * s, y: v.y + (cy - r.top - oy) * s, s };
+        };
+        // 寬度 w 的視窗，讓地圖點 p 落在螢幕 (cx, cy)；寬度限制在 [MIN_VIEW_W, 全圖]
+        const placeAt = (p, cx, cy, w, from) => {
+            const base = svg._base;
+            w = Math.min(base.w, Math.max(MIN_VIEW_W, w));
+            if (w === base.w) return { ...base };
+            const v = { x: 0, y: 0, w, h: w * from.h / from.w };
+            const { r, s, ox, oy } = fit(v);
+            v.x = p.x - (cx - r.left - ox) * s;
+            v.y = p.y - (cy - r.top - oy) * s;
+            return v;
         };
         // 以螢幕上的 (cx, cy) 為中心縮放；未指定時以畫面中心
         const zoom = (factor, cx, cy) => {
-            const v = svg._vb, base = svg._base;
-            const w = Math.min(base.w, Math.max(base.w / 60, v.w / factor));
-            if (w === base.w) { setVb({ ...base }); return; }
-            const f = v.w / w;
-            const p = cx === undefined ? { x: v.x + v.w / 2, y: v.y + v.h / 2 } : toSvg(cx, cy);
-            setVb({ x: p.x - (p.x - v.x) / f, y: p.y - (p.y - v.y) / f, w, h: v.h / f });
+            tip.hidden = true;
+            const v = svg._vb;
+            if (cx === undefined) { const r = svg.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+            setVb(placeAt(toSvg(cx, cy), cx, cy, v.w / factor, v));
         };
+        const goRegion = k => {
+            tip.hidden = true;
+            const b = svg._base, g = REGIONS[k].box;
+            setVb(g ? regionBox(g) : { ...b });
+            modal.querySelectorAll('[data-region]').forEach(x => x.classList.toggle('active', x.dataset.region === k));
+        };
+        svg._goRegion = goRegion;
         svg.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.25 : 0.8, e.clientX, e.clientY); }, { passive: false });
-        svg.addEventListener('dblclick', e => zoom(2, e.clientX, e.clientY));
+        // 觸控的連點自己判斷（下方 pointerup）；有些瀏覽器觸控也會送 dblclick，略過以免放大兩次
+        let lastType = 'mouse';
+        svg.addEventListener('dblclick', e => { if (lastType !== 'touch') zoom(2, e.clientX, e.clientY); });
 
-        let drag = null;
+        // 拖曳（一指或滑鼠）與雙指縮放：記住每個按下的指標
+        const pts = new Map();
+        let drag = null, pinch = null, lastTap = null;
+        const mid = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 }; };
         svg.addEventListener('pointerdown', e => {
-            drag = { x: e.clientX, y: e.clientY, vb: { ...svg._vb }, moved: false };
+            lastType = e.pointerType;
+            pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
             svg.setPointerCapture(e.pointerId);
+            if (pts.size === 1) {
+                drag = { x: e.clientX, y: e.clientY, vb: { ...svg._vb }, moved: false };
+            } else if (pts.size === 2) {
+                const m = mid();
+                pinch = { d: m.d, vb: { ...svg._vb }, p: toSvg(m.x, m.y) };
+                drag = null;
+                lastTap = null;
+                tip.hidden = true;
+            }
         });
         svg.addEventListener('pointermove', e => {
+            if (!pts.has(e.pointerId)) return;
+            pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            if (pinch && pts.size >= 2) {
+                // 兩指中點下的地圖點跟著手指走，同時依兩指距離縮放
+                const m = mid();
+                setVb(placeAt(pinch.p, m.x, m.y, pinch.vb.w * pinch.d / m.d, pinch.vb));
+                svg._dragging = true;
+                return;
+            }
             if (!drag) return;
             const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-            if (!drag.moved && Math.hypot(dx, dy) < 3) return;
+            if (!drag.moved && Math.hypot(dx, dy) < (e.pointerType === 'touch' ? 8 : 3)) return;
             drag.moved = svg._dragging = true;
+            tip.hidden = true;
             svg.classList.add('dragging');
-            const { s } = toSvg(0, 0);
+            const { s } = toSvg(0, 0, drag.vb);
             setVb({ ...drag.vb, x: drag.vb.x - dx * s, y: drag.vb.y - dy * s });
         });
-        const endDrag = () => { drag = null; svg._dragging = false; svg.classList.remove('dragging'); };
-        svg.addEventListener('pointerup', endDrag);
-        svg.addEventListener('pointercancel', endDrag);
+        const endPointer = e => {
+            pts.delete(e.pointerId);
+            const tap = e.type === 'pointerup' && e.pointerType === 'touch' && drag && !drag.moved && !pinch;
+            if (tap) {
+                // 連點放大：0.3 秒內、25px 內的第二下
+                const now = Date.now();
+                if (lastTap && now - lastTap.t < 300 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 25) {
+                    zoom(2, e.clientX, e.clientY);
+                    lastTap = null;
+                } else lastTap = { t: now, x: e.clientX, y: e.clientY };
+            }
+            if (pts.size < 2) pinch = null;
+            if (pts.size === 1) {
+                // 雙指放開一指：剩下那指接著拖曳，不會跳動
+                const [p] = pts.values();
+                drag = { x: p.x, y: p.y, vb: { ...svg._vb }, moved: true };
+                return;
+            }
+            if (!pts.size) { drag = null; svg._dragging = false; svg.classList.remove('dragging'); }
+        };
+        svg.addEventListener('pointerup', endPointer);
+        svg.addEventListener('pointercancel', endPointer);
 
         modal.addEventListener('click', e => {
-            const act = e.target.dataset && e.target.dataset.act;
+            const ds = e.target.dataset || {}, act = ds.act;
             if (e.target === modal || act === 'close') closeModal();
             else if (act === 'in') zoom(1.5);
             else if (act === 'out') zoom(1 / 1.5);
-            else if (act === 'reset') setVb({ ...svg._base });
+            else if (act === 'reset') goRegion(DEFAULT_REGION);
+            else if (ds.region) goRegion(ds.region);
         });
         document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
     }
@@ -494,7 +574,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         svg._data = state.data;
         const [x, y, w, h] = m.viewBox.split(' ').map(Number);
         svg._base = { x, y, w, h };
-        svg._vb = { ...svg._base };
+        svg._goRegion(DEFAULT_REGION);
         modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1);
     }
 
@@ -703,9 +783,12 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             if (t === dmodal || t.dataset.act === 'close') closeDetail();
             else if (t.dataset.sort && dmodal._data) { dmodal._sort = t.dataset.sort; drawDetail(); }
             else if (t.dataset.madd && dmodal._addInfo) openAddForm(t.closest('.ex-madd'), dmodal._addInfo);
+            else if (t.dataset.mpick !== undefined) openPicker(t.closest('.ex-madd'));
             else if (t.dataset.mrow !== undefined) {
                 const r = dmodal._rows[+t.dataset.mrow];
-                if (r && r.add) openAddForm(t.closest('.ex-drow'), r.add);
+                // 從搜尋選單選的：表單接在選單後面（選單本身會被 openAddForm 收掉，改接在加入鈕那一列）
+                const anchor = t.closest('.ex-mpick') ? dmodal.querySelector('.ex-mpick-box') : t.closest('.ex-drow');
+                if (r && r.add) openAddForm(anchor, r.add);
             }
             else if (t.dataset.mdel !== undefined) deleteManual(+t.dataset.mdel);
             else if (t.dataset.mok !== undefined) submitAddForm(t.closest('.ex-mform'));
@@ -767,8 +850,11 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             ? `<span class="ex-dact"><button type="button" class="ex-mbtn" data-mdel="${r.manual}" title="刪除這筆手動紀錄">🗑 刪除</button></span>`
             : r.add ? `<span class="ex-dact"><button type="button" class="ex-mbtn" data-mrow="${i}">＋ 我去過</button></span>` : '<span class="ex-dact"></span>';
         dmodal._rows = rows;
+        // 集點卡（車站、山）：明細最上方放「手動加入」，可搜尋未到的項目（未到的列排在最下面，不好找）
+        const pickBox = canManual && ps && rows.some(r => r.add) ? `<div class="ex-madd ex-mpick-box">
+            <button type="button" class="ex-mbtn primary" data-mpick>✋ 手動加入${ps.unit === '座' ? '山' : '車站'}</button></div>` : '';
         const head = `<div class="ex-drow ex-dhead">${d.columns.map(c => `<span>${esc(c)}</span>`).join('')}${withAct ? '<span class="ex-dact"></span>' : ''}</div>`;
-        body.innerHTML = head + rows.map((r, i) => {
+        body.innerHTML = pickBox + head + rows.map((r, i) => {
             const cells = r.cells.map(c => `<span>${esc(c)}</span>`).join('') + act(r, i);
             if (!r.items || !r.items.length) return `<div class="ex-drow${r.hit ? '' : ' miss'}${r.manual !== undefined ? ' manual' : ''}">${cells}</div>`;
             return `<details class="ex-dfold${r.hit ? '' : ' miss'}"><summary class="ex-drow">${cells}</summary>
@@ -797,6 +883,33 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         anchor.after(f);
         f.querySelector('input').focus();
         f.scrollIntoView({ block: 'nearest' });
+    }
+
+    /** 集點卡的搜尋選單：輸入名稱篩選未到的項目，點一個就在下方打開加入表單 */
+    const PICK_MAX = 30;
+    function openPicker(anchor) {
+        dmodal.querySelectorAll('.ex-mform').forEach(f => f.remove());
+        const cands = dmodal._rows.map((r, i) => ({ r, i })).filter(x => x.r.add);
+        const isPeak = (dmodal._data.id || '').startsWith(POINT_STAMPS.peak.prefix);
+        const f = document.createElement('div');
+        f.className = 'ex-mform ex-mpick';
+        f.innerHTML = `<div class="ex-mform-title">✋ 手動加入${isPeak ? '山' : '車站'}：先選${isPeak ? '哪一座' : '哪一站'}</div>
+            <input type="search" placeholder="輸入${isPeak ? '山名' : '站名'}搜尋（共 ${cands.length} ${isPeak ? '座' : '站'}未${isPeak ? '登頂' : '到'}）" autocomplete="off">
+            <div class="ex-mpick-list"></div>
+            <div class="ex-mform-btns"><button type="button" class="ex-mbtn" data-mcancel>取消</button></div>`;
+        const list = f.querySelector('.ex-mpick-list');
+        const draw = () => {
+            const norm = s => s.replace(/臺/g, '台');   // 站名用「臺」，使用者多半打「台」
+            const q = norm(f.querySelector('input').value.trim());
+            const hit = q ? cands.filter(x => norm(x.r.cells[0]).includes(q)) : cands;
+            list.innerHTML = hit.slice(0, PICK_MAX).map(x => `<button type="button" class="ex-mbtn" data-mrow="${x.i}">${esc(x.r.cells[0])}</button>`).join('')
+                + (hit.length > PICK_MAX ? `<small>還有 ${hit.length - PICK_MAX} 筆，請輸入更多字縮小範圍</small>` : '')
+                + (!hit.length ? '<small>找不到符合的名稱</small>' : '');
+        };
+        f.querySelector('input').addEventListener('input', draw);
+        draw();
+        anchor.after(f);
+        f.querySelector('input').focus();
     }
 
     async function submitAddForm(f) {

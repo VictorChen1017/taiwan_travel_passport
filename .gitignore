@@ -6,3 +6,6 @@ test/
 # Claude Code 的專案說明（含本機路徑與工作習慣，不公開）
 CLAUDE.md
 CLAUDE.local.md
+
+# Claude Code 本機設定（含本機路徑）
+.claude/
