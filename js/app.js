@@ -12,6 +12,7 @@ import { exportBackup, parseBackup } from './backup.js';
 import * as manual from './manual.js';
 import { GROUP_COLOR } from './shared.js';
 import { createReport } from './report.js';
+import { TOUCH } from './device.js';
 
 const PATH_KEY = 'fog-include-path';   // 「包含移動路徑」記在 localStorage（只是顯示偏好）
 const readPathPref = () => { try { return localStorage.getItem(PATH_KEY) === '1'; } catch (e) { return false; } };
@@ -413,8 +414,7 @@ async function doExport() {
     if (!confirm(`匯出 ${pick.length} 個來源、共 ${n0(total)} 筆紀錄成備份檔（.json）。\n\n這個檔案含有你的位置紀錄（座標與時間），請自行保管，不要公開分享。`)) return;
     const { blob, filename, size } = exportBackup(pick, { includePath: app.includePath });
     const file = new File([blob], filename, { type: 'application/json' });
-    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    if (touch && navigator.canShare && navigator.canShare({ files: [file] })) {
+    if (TOUCH && navigator.canShare && navigator.canShare({ files: [file] })) {
         try { await navigator.share({ files: [file], title: filename }); return; }
         catch (e) { if (e.name === 'AbortError') return; /* 分享失敗就改下載 */ }
     }
@@ -592,7 +592,7 @@ function openToc(open) {
 }
 
 /**
- * 「？」說明鈕：任何 .qtip[data-tip] 點一下在旁邊顯示說明泡泡，再點一次、點別處、Esc 或捲動時關閉。
+ * 「？」說明鈕：任何 [data-tip]（.qtip 說明鈕、觸控時的鄉鎮明細小方塊）點一下在旁邊顯示說明泡泡，再點一次、點別處、Esc 或捲動時關閉。
  * 手機沒有滑鼠移上，所以不用 title。
  */
 function bindTips() {
@@ -609,7 +609,7 @@ function bindTips() {
         pop.hidden = true;
     };
     document.addEventListener('click', e => {
-        const b = e.target.closest('.qtip[data-tip]');
+        const b = e.target.closest('[data-tip]');
         if (!b) { if (!e.target.closest('.qtip-pop')) hide(); return; }
         e.preventDefault();   // 在 label 裡也不要切換勾選
         e.stopPropagation();
@@ -729,7 +729,7 @@ function bindUi() {
     });
 
     // 手機照片（補點）：只在觸控裝置顯示；選取方式由系統選單決定（iOS 照片圖庫會把 HEIC 轉成 JPEG，選擇檔案拿到原檔）
-    if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) $('phoneCard').hidden = false;
+    if (TOUCH) $('phoneCard').hidden = false;
     $('phoneBtn').addEventListener('click', () => $('phoneInput').click());
     $('phoneInput').addEventListener('change', e => {
         const files = e.target.files;

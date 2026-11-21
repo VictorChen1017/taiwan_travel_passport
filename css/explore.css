@@ -1,4 +1,5 @@
-/* 迷霧探索成就頁（js/explore.js）；複製自原專案 dashboard/explore.css */
+/* 迷霧探索成就頁（js/explore.js）；複製自原專案 dashboard/explore.css
+   寬度分界只用 640／900／1200（規則見 js/device.js 開頭） */
 
 /* 模組變數只當別名，指向 --c-*；彈窗掛在 body 下，也要定義 */
 #explore,
@@ -117,7 +118,7 @@
 .ex-recent { grid-area: recent; }
 .ex-yearly { grid-area: yearly; }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
     .ex-grid {
         grid-template-columns: 1fr 1fr;
         grid-template-areas:
@@ -127,7 +128,7 @@
     }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 640px) {
     .ex-grid {
         grid-template-columns: 1fr;
         grid-template-areas: "map" "progress" "recent" "yearly";
@@ -514,6 +515,16 @@
 .ex-chip.on {
     color: var(--c-accent-strong);
     background: var(--c-accent-soft);
+}
+
+/* 觸控：鄉鎮小方塊點一下顯示首次解鎖日期（data-tip），點開的那個加外框 */
+.ex-chip[data-tip] {
+    cursor: pointer;
+}
+
+.ex-chip[aria-expanded="true"] {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 1px;
 }
 
 .ex-fold {
@@ -1474,7 +1485,7 @@ body.ex-modal-open {
     font-size: calc(12.5px * var(--fs, 1));
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
     .ex-drow {
         grid-template-columns: 7.5em 5.5em 1fr;
         gap: 8px;
@@ -1494,7 +1505,7 @@ body.ex-modal-open {
     grid-template-columns: 1fr 8em;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
     .ex-dmodal-body.two-col .ex-drow { grid-template-columns: 7.5em 1fr; }
     .ex-dmodal-body.two-col.name-first .ex-drow { grid-template-columns: 1fr 7em; }
 }
@@ -1502,7 +1513,7 @@ body.ex-modal-open {
 /* 手動紀錄：每列右側的按鈕欄（＋ 我去過／🗑 刪除）、加入表單 */
 .ex-dmodal-body.two-col.with-act .ex-drow { grid-template-columns: 9em 1fr 6.5em; }
 .ex-dmodal-body.two-col.name-first.with-act .ex-drow { grid-template-columns: 1fr 8em 6.5em; }
-@media (max-width: 600px) {
+@media (max-width: 640px) {
     .ex-dmodal-body.two-col.with-act .ex-drow { grid-template-columns: 7.5em 1fr 6em; }
     .ex-dmodal-body.two-col.name-first.with-act .ex-drow { grid-template-columns: 1fr 6.5em 6em; }
 }

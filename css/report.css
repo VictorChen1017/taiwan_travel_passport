@@ -1,5 +1,6 @@
 /* 成就報表彈窗（js/report.js）：左邊選項、右邊預覽；窄畫面改成上下排列
-   介面色一律用 css/theme.css 的 --c-*；報表圖片本身的顏色在 js/report.js 繪製時讀取 */
+   介面色一律用 css/theme.css 的 --c-*；報表圖片本身的顏色在 js/report.js 繪製時讀取
+   寬度分界只用 640／900／1200（規則見 js/device.js 開頭） */
 
 .rp-modal {
     position: fixed;
@@ -335,7 +336,7 @@
     opacity: 0.5;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
     .rp-modal {
         padding: 0;
     }

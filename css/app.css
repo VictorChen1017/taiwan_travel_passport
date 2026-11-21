@@ -1,5 +1,13 @@
 /* 頁面外框：頂列、成就目錄、匯入引導、頁尾、計算中遮罩
- * 顏色一律用 css/theme.css 的 --c-* 變數 */
+ * 顏色一律用 css/theme.css 的 --c-* 變數
+ * 手機／電腦適配的規則（寬度只用 640／900／1200 三個分界、觸控用 pointer: coarse、:hover 包在 hover: hover 裡）見 js/device.js 開頭 */
+
+/* 依輸入方式切換文字：<span class="only-touch">點一下</span><span class="only-mouse">滑過</span>（同 js/device.js 的 TOUCH） */
+.only-touch { display: none; }
+@media (pointer: coarse) {
+    .only-touch { display: inline; }
+    .only-mouse { display: none; }
+}
 
 /* 字級縮放倍率：各處字級寫成 calc(Npx * var(--fs, 1))，寬螢幕整體放大（手機、平板維持原大小） */
 :root {
@@ -342,7 +350,7 @@ a.app-btn {
 /* 頂列「說明」：一般寬度顯示文字，窄畫面只留圖示 */
 
 /* 中等寬度頂列放不下：說明、成就報表只留圖示，模式按鈕用短標籤 */
-@media (max-width: 1000px) {
+@media (max-width: 1200px) {
     #helpBtn span,
     #reportBtn span,
     .app-mode .long { display: none; }

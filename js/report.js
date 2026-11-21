@@ -14,6 +14,7 @@
 // 繪製分兩次：先「量」（dry，只算高度），再依總高度建立畫布真正畫出來
 
 import { GROUP_LABEL, POINT_STAMPS } from './explore.js';
+import { canShareFile } from './device.js';
 import { GROUP_COLOR, ICONS, shapeOf, badgeColors, yearColor, EARLY_YEAR, YEAR_COLOR_FROM, YEAR_COLOR_TO, UNKNOWN_YEAR_COLOR, YEARLY_BAR_COLOR, CONQUER_LEVELS, conquerColor } from './shared.js';
 
 const W = 1080, PAD = 44, CW = W - PAD * 2;   // 圖寬、外邊距、內容寬
@@ -698,12 +699,6 @@ function savePref(o) {
         localStorage.setItem(PREF_KEY, JSON.stringify({ preset: o.preset, blocks: [...o.blocks], hideMissing: [...o.hideMissing], subOff: o.subOff, cumul: o.cumul, vCounty: o.vCounty,
             hideDates: o.hideDates, hideRegular: o.hideRegular, nickname: o.nickname, mapLevel: o.mapLevel, mapColor: o.mapColor }));
     } catch (e) { /* 存不了只影響下次 */ }
-}
-
-// 手機（觸控）且瀏覽器能分享檔案：按鈕改為「分享／儲存」，叫出系統分享選單（可傳到 App 或存到相簿）；電腦一律下載
-function canShareFile(file = new File([''], 'a.png', { type: 'image/png' })) {
-    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    try { return !!(touch && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
 }
 
 const presetBlocks = id => new Set((PRESETS.find(p => p.id === id) || PRESETS[0]).blocks);

@@ -14,6 +14,7 @@
 
 import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor, CONQUER_LEVELS, conquerColor } from './shared.js';
 import { TILE } from './tiles.js';
+import { TOUCH, tapWord } from './device.js';
 
 export const GROUP_LABEL = { milestone: '里程碑', conquer: '制霸', pole: '極點', island: '離島', landmark: '景點', bspot: 'B 級景點', peak: '登山', rail: '臺鐵・高鐵', metro: '捷運', lrt: '輕軌', nature: '國家公園與保護區', travel: '旅行' };
 const UNIT_LABEL = { county: '縣市', town: '鄉鎮', village: '村里' };
@@ -34,7 +35,6 @@ const DEFAULT_REGION = 'main';
 const regionBox = ([w, s, e, n]) => ({ x: w * MAP_KX, y: -n, w: (e - w) * MAP_KX, h: n - s });
 // 放大上限：視窗最窄 0.15 地圖單位（約 16 公里寬，一個鄉鎮大致佔滿手機畫面）；再放大會看出界線簡化（約 200 公尺）的瑕疵
 const MIN_VIEW_W = 0.15;
-const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 const isPointDetail = id => Object.values(POINT_STAMPS).some(p => id.startsWith(p.prefix));
 
 const pad = n => String(n).padStart(2, '0');
@@ -287,11 +287,13 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         }
 
         if (state.unit === 'town') {
-            title.textContent = '明細：各縣市的鄉鎮（滑過看首次解鎖日期）';
+            // 滑鼠滑過用 title；觸控沒有滑過，改用 data-tip 點一下顯示說明泡泡（js/app.js bindTips）
+            title.textContent = `明細：各縣市的鄉鎮（${tapWord()}看首次解鎖日期）`;
+            const tipAttr = TOUCH ? 'data-tip' : 'title';
             el.innerHTML = sortedCounties.map(c => {
                 const towns = d.towns.filter(t => t.county === c.code);
                 const chips = towns.map(t => `<span class="ex-chip${t.unlocked ? ' on' : ''}"
-                    title="${esc(t.name)}：${t.unlocked ? '首次解鎖 ' + fmtDate(t.first) : '未解鎖'}">${esc(t.name)}</span>`).join('');
+                    ${tipAttr}="${esc(t.name)}：${t.unlocked ? '首次解鎖 ' + fmtDate(t.first) : '未解鎖'}">${esc(t.name)}</span>`).join('');
                 return `<div class="ex-group">
                     <div class="ex-group-head"><b>${esc(c.name)}</b><span>${c.towns_unlocked} / ${c.towns}</span>
                         ${c.towns_unlocked === c.towns ? '<span class="ex-tag">制霸</span>' : ''}</div>
@@ -426,7 +428,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             tip.style.left = Math.max(4, Math.min(cx - r.left + 14, r.width - 200)) + 'px';
             tip.style.top = Math.max(4, Math.min(cy - r.top + 14, r.height - 50)) + 'px';
             tip.hidden = false;
-            if (COARSE || Date.now() - touchAt < 1500) el.classList.add('sel');
+            if (TOUCH || Date.now() - touchAt < 1500) el.classList.add('sel');
         };
         svg.addEventListener('mousemove', e => {
             if (Date.now() - touchAt < 1500) return;
@@ -448,7 +450,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             <div class="ex-modal-box" role="dialog" aria-modal="true" aria-labelledby="ex-modal-title">
                 <div class="ex-modal-head">
                     <span id="ex-modal-title" class="ex-modal-title"></span>
-                    <span class="ex-modal-hint">${COARSE ? '雙指縮放・拖曳移動・連點放大' : '滾輪縮放・拖曳移動・雙擊放大'}</span>
+                    <span class="ex-modal-hint">${TOUCH ? '雙指縮放・拖曳移動・連點放大' : '滾輪縮放・拖曳移動・雙擊放大'}</span>
                     <span class="ex-modal-regions" role="group" aria-label="地區">${Object.entries(REGIONS).map(([k, r]) =>
                         `<button type="button" data-region="${k}">${r.label}</button>`).join('')}</span>
                     <span class="ex-modal-tools">

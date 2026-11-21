@@ -1,5 +1,6 @@
 /* 使用說明頁（help.html）：左邊目錄、右邊內文；窄畫面目錄移到上方
-   顏色一律用 css/theme.css 的 --c-*；字級寫成 calc(Npx * var(--fs, 1)) */
+   顏色一律用 css/theme.css 的 --c-*；字級寫成 calc(Npx * var(--fs, 1))
+   寬度分界只用 640／900／1200（規則見 js/device.js 開頭） */
 
 .hp {
     display: flex;
@@ -159,7 +160,7 @@
     color: var(--c-link);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
     .hp {
         flex-direction: column;
         gap: 16px;
