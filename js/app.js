@@ -292,19 +292,9 @@ async function importFolder(getItems, name, { phone = false } = {}) {
             return;
         }
         if (phone) {
-            const r = await addPhone(src), st = src.stats;
-            const dup = (st.duplicates || 0) + r.dup, other = (st.videos || 0) + (st.other || 0);
-            const msg = [
-                r.added ? `✅ 已加入 ${n0(r.added)} 筆新的足跡` : '這些照片的足跡都已經加入過了，沒有新增。',
-                '',
-                `這次選了 ${n0(st.files)} 個檔案：`,
-                `・有座標 ${n0(src.records.lat.length + (st.duplicates || 0))} 張${dup ? `（其中 ${n0(dup)} 張之前加過或重複，不再加入）` : ''}`,
-                st.noGps ? `・沒有 GPS ${n0(st.noGps)} 張（略過）` : '',
-                st.failed ? `・無法讀取 ${n0(st.failed)} 張` : '',
-                other ? `・影片或其他檔案 ${n0(other)} 個（略過）` : '',
-                '',
-                `「手機照片」目前共 ${n0(r.total)} 筆足跡。`,
-            ].filter((s, i, a) => s || (i > 0 && a[i - 1])).join('\n');
+            const r = await addPhone(src);
+            // 只說結果；略過原因等細節在「已匯入的資料」展開詳細資訊
+            const msg = r.added ? `✅ 匯入成功：${n0(r.added)} 張照片的位置` : '這些照片之前都加入過了，沒有新增。';
             setTimeout(() => alert(msg), 50);
         } else await addSource(src);
     } catch (e) {
@@ -342,9 +332,13 @@ async function importTimeline(files, name) {
     }
 }
 
+/**
+ * 來源的說明：main 一行重點（點位、照片數），detail 是展開「詳細資訊」才看的（期間、略過原因、格式）
+ */
 function sourceSummary(s) {
     const st = s.stats || {};
     const range = st.from ? (st.to && st.to !== st.from ? `${ymd(st.from)} ～ ${ymd(st.to)}` : ymd(st.from)) : '時間不明';
+    const upd = `最後更新 ${ymdLocal(updatedOf(s))}`;
     if (s.type === 'exif') {
         const skipped = [
             st.noGps ? `沒有 GPS ${n0(st.noGps)}` : '',
@@ -353,22 +347,31 @@ function sourceSummary(s) {
             st.videos ? `影片 ${n0(st.videos)}` : '',
             st.other ? `其他檔案 ${n0(st.other)}` : '',
         ].filter(Boolean).join('、');
-        const tw = st.taiwan !== undefined && st.taiwan < s.records.lat.length ? `，台灣範圍內 ${n0(st.taiwan)} 筆` : '';
-        return `<b>${n0(s.records.lat.length)}</b> 筆有座標（照片 ${n0(st.photos)} 張${tw}）・${range}` +
-            (skipped ? `<br>略過：${skipped}` : '') + (st.noTime ? `<br>其中 ${n0(st.noTime)} 張沒有拍攝時間（仍算解鎖，不參與日期）` : '');
+        return {
+            main: `<b>${n0(s.records.lat.length)}</b> 張照片有位置`,
+            detail: [`期間：${range}`, st.photos ? `讀取照片 ${n0(st.photos)} 張` : '',
+                st.taiwan !== undefined && st.taiwan < s.records.lat.length ? `在台灣範圍內 ${n0(st.taiwan)} 張` : '',
+                skipped ? `略過：${skipped}` : '', st.noTime ? `${n0(st.noTime)} 張沒有拍攝時間（仍算解鎖，不參與日期）` : '', upd],
+        };
     }
     if (s.type === 'gtimeline') {
         const fmts = Object.keys(s.formats || {}).map(gtl.formatLabel).join('、');
-        return `停留點 <b>${n0(st.visits)}</b>、移動路徑 ${n0(st.path)} 點（台灣範圍內 ${n0(st.taiwan)} 筆）・${range}` +
-            `<br>${fmts ? fmts + '・' : ''}${st.files > 1 ? `${n0(st.files)} 個檔案・` : ''}略過：可信度太低的停留點 ${n0(st.lowProb)}、重複的路徑點 ${n0(st.pathDup)}` +
-            (s.skipped?.length ? `、看不懂的檔案 ${n0(s.skipped.length)}` : '');
+        return {
+            main: `<b>${n0(st.visits)}</b> 個停留點`,
+            detail: [`期間：${range}`, `移動路徑 ${n0(st.path)} 點`, `在台灣範圍內 ${n0(st.taiwan)} 筆`,
+                fmts ? `格式：${fmts}` : '', st.files > 1 ? `${n0(st.files)} 個檔案` : '',
+                `略過：可信度太低的停留點 ${n0(st.lowProb)}、重複的路徑點 ${n0(st.pathDup)}${s.skipped?.length ? `、看不懂的檔案 ${n0(s.skipped.length)}` : ''}`, upd],
+        };
     }
     if (s.type === 'manual') {
         const noDate = s.items.filter(it => !Number.isFinite(it.time)).length;
-        return `<b>${n0(s.items.length)}</b> 筆手動加入的地點・${st.from ? range : '都沒有日期'}` +
-            (noDate && st.from ? `（${n0(noDate)} 筆沒有日期）` : '') + '<br>只在造訪模式計入；要刪除單筆請到該成就的明細';
+        return {
+            main: `<b>${n0(s.items.length)}</b> 個手動加入的地點`,
+            detail: [st.from ? `期間：${range}` : '都沒有日期', noDate && st.from ? `${n0(noDate)} 筆沒有日期` : '',
+                '只在造訪模式計入；要刪除單筆請到該成就的明細', upd],
+        };
     }
-    return `<b>${n0(s.records.lat.length)}</b> 筆足跡・${range}`;
+    return { main: `<b>${n0(s.records.lat.length)}</b> 個點位`, detail: [`期間：${range}`, upd] };
 }
 
 /** 已匯入的資料：每列一個來源，勾選後按「刪除所選」 */
@@ -381,7 +384,8 @@ function renderSources() {
         <li data-id="${esc(s.id)}">
             <input type="checkbox" aria-label="選取「${esc(s.name || '未命名')}」">
             <span class="icon">${sourceIcon(s)}</span>
-            <div><div class="name">${esc(s.name || '未命名')}</div><div class="meta">${sourceSummary(s)}<br><span class="upd">最後更新 ${ymdLocal(updatedOf(s))}</span></div></div>
+            <div><div class="name">${esc(s.name || '未命名')}</div>${(sum => `<div class="meta">${sum.main}</div>
+                <details class="src-more"><summary>詳細資訊</summary><div class="meta">${sum.detail.filter(Boolean).join('<br>')}</div></details>`)(sourceSummary(s))}</div>
         </li>`).join('');
     updateSelection();
 }
@@ -452,7 +456,7 @@ async function doExport() {
 async function importBackup(file) {
     busy('讀取備份檔…');
     try {
-        const { sources, settings, exported } = parseBackup(await file.text());
+        const { sources, settings } = parseBackup(await file.text());
         busy(null);
         const added = [], replaced = [], same = [], older = [], declined = [];
         let manualAdded = 0, manualSrc = null;
@@ -477,24 +481,14 @@ async function importBackup(file) {
         const changed = [...added, ...replaced];
         for (const s of changed) await saveSource(s);
         if (manualSrc) { await saveSource(manualSrc); changed.push(manualSrc); }
-        const hadManual = sources.some(s => s.type === 'manual');
         if (typeof settings.includePath === 'boolean' && changed.some(s => s.type === 'gtimeline')) {
             app.includePath = settings.includePath;
             try { localStorage.setItem(PATH_KEY, app.includePath ? '1' : '0'); } catch (e) { /* 只影響這次 */ }
         }
         renderSources();
-        const bad = changed.reduce((a, s) => a + (s.restored?.bad || 0), 0);
-        const names = list => list.map(s => `「${s.name}」`).join('、');
-        const msg = [
-            `備份檔${exported ? `（${exported.slice(0, 16).replace('T', ' ')} 匯出）` : ''}：`,
-            added.length ? `・新增 ${added.length} 個：${names(added)}` : '',
-            replaced.length ? `・取代成較新的版本 ${replaced.length} 個：${names(replaced)}` : '',
-            same.length ? `・已經是相同版本，略過 ${same.length} 個：${names(same)}` : '',
-            older.length ? `・這裡的版本比較新，略過 ${older.length} 個：${names(older)}` : '',
-            declined.length ? `・你選擇保留這裡的版本 ${declined.length} 個：${names(declined)}` : '',
-            hadManual ? (manualAdded ? `・手動紀錄合併進 ${n0(manualAdded)} 筆` : '・手動紀錄都已經有了，沒有新增') : '',
-            bad ? `・有 ${n0(bad)} 筆紀錄格式不對，略過` : '',
-        ].filter(Boolean).join('\n');
+        // 只說結果（幾個點位），不列來源名稱與略過原因
+        const points = [...added, ...replaced].reduce((a, s) => a + s.records.lat.length, 0) + manualAdded;
+        const msg = points ? `✅ 匯入成功：${n0(points)} 個點位` : '沒有新增資料（這裡已經有相同或比較新的版本）。';
         if (changed.length) { await compute(); setTimeout(() => alert(msg), 50); }
         else alert(msg);
     } catch (e) {
@@ -703,7 +697,7 @@ function bindUi() {
     // 已匯入的來源：點整列切換勾選、全選、刪除所選
     $('sourceList').addEventListener('click', e => {
         const li = e.target.closest('li[data-id]');
-        if (!li) return;
+        if (!li || e.target.closest('.src-more')) return;   // 展開詳細資訊不切換勾選
         if (e.target.type !== 'checkbox') { const b = li.querySelector('input'); b.checked = !b.checked; }
         updateSelection();
     });

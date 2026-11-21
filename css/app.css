@@ -985,6 +985,23 @@ a.app-btn {
     color: var(--c-text-faint);
 }
 
+/* 來源的「詳細資訊」：預設收起，點了才看期間、略過原因等 */
+.app-source-list .src-more {
+    margin-top: 2px;
+}
+
+.app-source-list .src-more summary {
+    width: fit-content;
+    font-size: calc(12.5px * var(--fs, 1));
+    color: var(--c-link);
+    cursor: pointer;
+}
+
+.app-source-list .src-more .meta {
+    margin-top: 4px;
+    line-height: 1.6;
+}
+
 /* 「？」說明鈕（data-tip）：點一下顯示說明泡泡（手機沒有滑鼠移上，所以用點的） */
 .qtip {
     display: inline-flex;
