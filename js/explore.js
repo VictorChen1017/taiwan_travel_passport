@@ -773,7 +773,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 const el = e.target.closest('.ex-badge[data-id]');
                 // 集點卡上點某個格子：地圖以那個點為中心
                 const cell = e.target.closest('.ex-stamp-cell[data-lat]');
-                if (el) openDetail(el.dataset.id, cell ? [+cell.dataset.lat, +cell.dataset.lng] : null);
+                if (el) openDetail(el.dataset.id, cell ? [+cell.dataset.lat, +cell.dataset.lng] : null, cell ? +cell.dataset.code : null);
             };
             box.addEventListener('click', open);
             box.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(e); } });
@@ -860,8 +860,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             else if (t.dataset.mpick !== undefined) openPicker(t.closest('.ex-madd'));
             else if (t.dataset.mrow !== undefined) {
                 const r = dmodal._rows[+t.dataset.mrow];
-                // 從搜尋選單選的：表單接在選單後面（選單本身會被 openAddForm 收掉，改接在加入鈕那一列）
-                const anchor = t.closest('.ex-mpick') ? dmodal.querySelector('.ex-mpick-box') : t.closest('.ex-drow');
+                // 從搜尋選單或最上方帶入的按鈕選的：表單接在加入鈕那一列（選單本身會被 openAddForm 收掉）
+                const anchor = t.closest('.ex-mpick, .ex-mpick-box') ? dmodal.querySelector('.ex-mpick-box') : t.closest('.ex-drow');
                 if (r && r.add) openAddForm(anchor, r.add);
             }
             else if (t.dataset.mdel !== undefined) deleteManual(+t.dataset.mdel);
@@ -871,8 +871,10 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         document.addEventListener('keydown', e => { if (e.key === 'Escape' && !dmodal.hidden) closeDetail(); });
     }
 
-    async function openDetail(id, focus = null) {
+    // pick：集點卡上點的格子編號（車站、山），「手動加入」直接帶入這一站，不用再搜尋
+    async function openDetail(id, focus = null, pick = null) {
         if (!dmodal) buildDetailModal();
+        dmodal._pick = pick;
         const a = state.data.achievements.find(x => x.id === id);
         dmodal.querySelector('.ex-modal-title').textContent = `📋 ${a ? a.name : ''}`;
         dmodal.querySelector('.ex-dmodal-desc').textContent = a ? a.desc : '';
@@ -925,8 +927,15 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             : r.add ? `<span class="ex-dact"><button type="button" class="ex-mbtn" data-mrow="${i}">＋ 我去過</button></span>` : '<span class="ex-dact"></span>';
         dmodal._rows = rows;
         // 集點卡（車站、山）：明細最上方放「手動加入」，可搜尋未到的項目（未到的列排在最下面，不好找）
-        const pickBox = canManual && ps && rows.some(r => r.add) ? `<div class="ex-madd ex-mpick-box">
-            <button type="button" class="ex-mbtn primary" data-mpick>✋ 手動加入${ps.unit === '座' ? '山' : '車站'}</button></div>` : '';
+        // 從集點卡或地圖點了某個未到的站：直接帶入那一站，按下去只要選日期
+        const what = ps && ps.unit === '座' ? '山' : '車站';
+        const picked = dmodal._pick != null ? rows.findIndex(r => r.add && r.add.target === `${d.id}#${dmodal._pick}`) : -1;
+        const pickBox = !(canManual && ps && rows.some(r => r.add)) ? ''
+            : picked >= 0 ? `<div class="ex-madd ex-mpick-box">
+                <button type="button" class="ex-mbtn primary" data-mrow="${picked}">✋ 手動加入「${esc(rows[picked].add.label)}」</button>
+                <button type="button" class="ex-mbtn" data-mpick>選其他${what === '山' ? '山' : '站'}</button></div>`
+            : `<div class="ex-madd ex-mpick-box">
+                <button type="button" class="ex-mbtn primary" data-mpick>✋ 手動加入${what}</button></div>`;
         const head = `<div class="ex-drow ex-dhead">${d.columns.map(c => `<span>${esc(c)}</span>`).join('')}${withAct ? '<span class="ex-dact"></span>' : ''}</div>`;
         body.innerHTML = pickBox + head + rows.map((r, i) => {
             const cells = r.cells.map(c => `<span>${esc(c)}</span>`).join('') + act(r, i);
@@ -1038,7 +1047,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (geo.marks && geo.marks.length) {
             const pts = [];
             const ps = Object.values(POINT_STAMPS).find(p => dmodal._id && dmodal._id.startsWith(p.prefix));
-            [...geo.marks].sort((x, y) => x[3] - y[3]).forEach(([lat, lng, label, done]) => {
+            [...geo.marks].sort((x, y) => x[3] - y[3]).forEach(([lat, lng, label, done, code]) => {
                 const isFocus = focus && Math.abs(focus[0] - lat) < 1e-6 && Math.abs(focus[1] - lng) < 1e-6;
                 const mk = L.circleMarker([lat, lng], isFocus
                     ? { radius: 9, color: themeColor('--c-text-strong'), weight: 2.5, fillColor: done ? '#ff4d1a' : '#9ca3af', fillOpacity: 1 }
@@ -1047,6 +1056,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                     : { radius: 4, color: '#6b7280', weight: 1, fillColor: '#9ca3af', fillOpacity: 0.7 })
                     .bindTooltip(`${esc(label)}${done ? `（已${ps ? ps.verb : '達成'}）` : ''}`).addTo(dmapLayer);
                 if (isFocus) focusMarker = mk;
+                // 點地圖上未到的點：最上方的「手動加入」改成帶入這一站
+                if (!done && code != null && manualApi) mk.on('click', () => { dmodal._pick = code; drawDetail(); });
                 // 對焦以本島與澎湖為準（金門、馬祖在更西邊，會把地圖拉得太遠；點位仍有畫出）
                 if (lng >= 119.3) pts.push([lat, lng]);
             });
@@ -1082,7 +1093,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const ps = POINT_STAMPS[a.group], peak = !!ps;
         const cells = peak ? a.cells : [...a.cells].sort((x, y) => (y.done - x.done) || (y.progress / y.target - x.progress / x.target));
         const cellHtml = c => peak
-            ? `<span class="ex-stamp-cell${c.done ? ' on' : ''}${c.tier ? ' g-' + c.tier : ''}${c.colors ? ' lined' : ''}"${lineStyle(c)} data-lat="${c.lat}" data-lng="${c.lng}" title="${c.ele != null ? `#${c.code} ${esc(c.name)}（${Number(c.ele).toLocaleString()} m）` : esc(c.name) + (c.grade ? `（${c.grade}站）` : '') + (c.lines ? `（${c.lines.join('、')}）` : '')}：${c.done ? (c.date ? fmtDate(c.date) + ' ' + ps.verb : `已${ps.verb}（時間不明）`) : '尚未' + ps.verb}">
+            ? `<span class="ex-stamp-cell${c.done ? ' on' : ''}${c.tier ? ' g-' + c.tier : ''}${c.colors ? ' lined' : ''}"${lineStyle(c)} data-lat="${c.lat}" data-lng="${c.lng}" data-code="${c.code}" title="${c.ele != null ? `#${c.code} ${esc(c.name)}（${Number(c.ele).toLocaleString()} m）` : esc(c.name) + (c.grade ? `（${c.grade}站）` : '') + (c.lines ? `（${c.lines.join('、')}）` : '')}：${c.done ? (c.date ? fmtDate(c.date) + ' ' + ps.verb : `已${ps.verb}（時間不明）`) : '尚未' + ps.verb}">
                 <b>${esc(c.name)}</b><small>${c.done ? '✓' : '#' + c.code}</small></span>`
             : `<span class="ex-stamp-cell${c.done ? ' on' : ''}"
                 title="${esc(c.name)}：${c.done ? fmtDate(c.date) + ' 制霸' : `${c.progress} / ${c.target} 鄉鎮`}">

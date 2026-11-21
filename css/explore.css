@@ -1576,6 +1576,11 @@ body.ex-modal-open {
     padding: 10px 14px 4px;
 }
 
+/* 帶入某一站時旁邊的「選其他站」 */
+.ex-mpick-box .ex-mbtn + .ex-mbtn {
+    margin-left: 8px;
+}
+
 .ex-mpick input[type="search"] {
     padding: 6px 8px;
     font: inherit;

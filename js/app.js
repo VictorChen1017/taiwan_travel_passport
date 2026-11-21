@@ -13,7 +13,7 @@ import * as manual from './manual.js';
 import { GROUP_COLOR } from './shared.js';
 import { createReport } from './report.js';
 
-const PATH_KEY = 'fog-include-path';   // 「包含移動途中」記在 localStorage（只是顯示偏好）
+const PATH_KEY = 'fog-include-path';   // 「包含移動路徑」記在 localStorage（只是顯示偏好）
 const readPathPref = () => { try { return localStorage.getItem(PATH_KEY) === '1'; } catch (e) { return false; } };
 
 const DATA = new URL('../data/', import.meta.url).href;
@@ -73,7 +73,7 @@ function loadMap(level) {
 // ---------- 計算 ----------
 
 /**
- * 合併各來源的紀錄。照片模式只用照片來源（手動紀錄只在造訪模式計入）；「包含移動途中」關閉時排除 kind 2
+ * 合併各來源的紀錄。照片模式只用照片來源（手動紀錄只在造訪模式計入）；「包含移動路徑」關閉時排除 kind 2
  * kind：0 照片、1 停留點、2 移動途中、3 手動紀錄、4 以範圍判定地點的手動紀錄
  * 手動紀錄另外帶 ref（items 的編號）與 targets（編號 → 地點成就 id），明細才知道哪一列是哪一筆
  */
@@ -358,7 +358,7 @@ function sourceSummary(s) {
     }
     if (s.type === 'gtimeline') {
         const fmts = Object.keys(s.formats || {}).map(gtl.formatLabel).join('、');
-        return `停留點 <b>${n0(st.visits)}</b>、移動途中 ${n0(st.path)} 點（台灣範圍內 ${n0(st.taiwan)} 筆）・${range}` +
+        return `停留點 <b>${n0(st.visits)}</b>、移動路徑 ${n0(st.path)} 點（台灣範圍內 ${n0(st.taiwan)} 筆）・${range}` +
             `<br>${fmts ? fmts + '・' : ''}${st.files > 1 ? `${n0(st.files)} 個檔案・` : ''}略過：可信度太低的停留點 ${n0(st.lowProb)}、重複的路徑點 ${n0(st.pathDup)}` +
             (s.skipped?.length ? `、看不懂的檔案 ${n0(s.skipped.length)}` : '');
     }
@@ -551,9 +551,10 @@ function renderToc() {
         ${ready ? '<button type="button" class="app-btn primary toc-import" data-act="view">🏅 查看成就</button>' : ''}
         <button type="button" class="app-btn toc-import" data-act="import">📂 匯入資料</button>
         ${ready ? '<button type="button" class="app-btn toc-report" data-act="report">📤 分享成就</button>' : ''}
-        <a class="app-btn toc-report toc-help" href="help.html">❓ 使用說明</a>
-        ${ready && hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path" title="時間軸裡移動時經過的點（例如坐車經過的鄉鎮）也算解鎖">
-            <input type="checkbox" id="pathToggle"${app.includePath ? ' checked' : ''}> 包含移動途中</label>` : ''}
+        <a class="app-btn toc-report toc-help" href="help.html" target="_blank" rel="noopener">❓ 使用說明</a>
+        ${ready && hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path">
+            <input type="checkbox" id="pathToggle"${app.includePath ? ' checked' : ''}> 包含移動路徑
+            <button type="button" class="qtip" data-tip="打開後，移動時途經的點也算造訪過。探索率會變高，但可能會失真。" aria-label="說明：包含移動路徑">?</button></label>` : ''}
         ${ready ? '' : '<p class="toc-empty">🔒 匯入資料後解鎖以下內容</p>'}
         <h2>總覽</h2>
         <ul>
@@ -590,7 +591,48 @@ function openToc(open) {
     $('tocBtn').setAttribute('aria-expanded', String(open));
 }
 
+/**
+ * 「？」說明鈕：任何 .qtip[data-tip] 點一下在旁邊顯示說明泡泡，再點一次、點別處、Esc 或捲動時關閉。
+ * 手機沒有滑鼠移上，所以不用 title。
+ */
+function bindTips() {
+    const pop = document.createElement('div');
+    pop.className = 'qtip-pop';
+    pop.setAttribute('role', 'tooltip');
+    pop.hidden = true;
+    document.body.appendChild(pop);
+    let cur = null;
+    const hide = () => {
+        if (!cur) return;
+        cur.setAttribute('aria-expanded', 'false');
+        cur = null;
+        pop.hidden = true;
+    };
+    document.addEventListener('click', e => {
+        const b = e.target.closest('.qtip[data-tip]');
+        if (!b) { if (!e.target.closest('.qtip-pop')) hide(); return; }
+        e.preventDefault();   // 在 label 裡也不要切換勾選
+        e.stopPropagation();
+        if (cur === b) { hide(); return; }
+        hide();
+        cur = b;
+        b.setAttribute('aria-expanded', 'true');
+        pop.textContent = b.dataset.tip;
+        pop.hidden = false;
+        // 放在按鈕下方，超出畫面時往左、往上移
+        const r = b.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+        const left = Math.max(12, Math.min(r.left + r.width / 2 - pw / 2, window.innerWidth - pw - 12));
+        const top = r.bottom + 8 + ph > window.innerHeight - 8 ? Math.max(8, r.top - ph - 8) : r.bottom + 8;
+        pop.style.left = `${left}px`;
+        pop.style.top = `${top}px`;
+    }, true);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && cur) { e.stopPropagation(); hide(); } }, true);
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+}
+
 function bindUi() {
+    bindTips();
     $('modeSeg').addEventListener('click', e => {
         const m = e.target.closest('button')?.dataset.mode;
         if (!m || m === app.mode) return;
@@ -625,7 +667,7 @@ function bindUi() {
         if (e.target.closest('[data-act="report"]')) { openToc(false); openReport(); return; }
         if (e.target.closest('[data-act="view"]')) { openToc(false); showExplore(); app.explore.showBadgeOverview(); return; }
         const a = e.target.closest('a');
-        if (!a || a.classList.contains('toc-help')) return;   // 使用說明：照連結換頁
+        if (!a || a.classList.contains('toc-help')) return;   // 使用說明：照連結另開分頁
         openToc(false);
         if ($('explore').hidden) showExplore();
         if (a.dataset.group) { e.preventDefault(); app.explore.jumpToGroup(a.dataset.group); return; }

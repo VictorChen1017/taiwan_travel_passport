@@ -778,6 +778,7 @@ a.app-btn {
 /* 成就目錄裡的「包含移動途中」開關 */
 .app-toc .toc-path {
     display: flex;
+    align-items: center;
     margin: -6px 0 14px;
     padding: 6px 8px;
     font-size: calc(14px * var(--fs, 1));
@@ -793,4 +794,50 @@ a.app-btn {
 
 .app-source-list .meta .upd {
     color: var(--c-text-faint);
+}
+
+/* 「？」說明鈕（data-tip）：點一下顯示說明泡泡（手機沒有滑鼠移上，所以用點的） */
+.qtip {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: calc(18px * var(--fs, 1));
+    height: calc(18px * var(--fs, 1));
+    margin-left: 4px;
+    padding: 0;
+    font-size: calc(12px * var(--fs, 1));
+    font-weight: bold;
+    line-height: 1;
+    color: var(--c-accent);
+    vertical-align: middle;
+    cursor: pointer;
+    background: none;
+    border: 1.5px solid var(--c-accent);
+    border-radius: 50%;
+}
+
+.qtip:hover,
+.qtip[aria-expanded="true"] {
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+}
+
+.qtip-pop {
+    position: fixed;
+    z-index: 3000;
+    max-width: min(300px, calc(100vw - 24px));
+    padding: 10px 12px;
+    font-size: calc(13.5px * var(--fs, 1));
+    font-weight: normal;
+    line-height: 1.6;
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px var(--c-shadow);
+}
+
+.qtip-pop[hidden] {
+    display: none;
 }

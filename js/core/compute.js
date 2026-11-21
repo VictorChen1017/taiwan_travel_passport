@@ -471,7 +471,7 @@ export function detail(ctx, id) {
         }
         note = isPeak ? `已登頂 ${done} / ${cells.length} 座；地圖紅點為已登頂、灰點為未登頂；未登頂的山可以手動加入`
                       : `已到站 ${done} / ${cells.length} 站；地圖紅點為已到站、灰點為未到站；未到的車站可以手動加入`;
-        geo = { marks: cells.map(c => [c.lat, c.lng, isPeak ? `#${c.code} ${c.name}` : c.name, c.done]) };
+        geo = { marks: cells.map(c => [c.lat, c.lng, isPeak ? `#${c.code} ${c.name}` : c.name, c.done, c.code]) };   // code：手動加入時預先帶入
     } else {
         // 地點：每次造訪（以天為單位）
         const p = S.achievements.places.find(x => x.id === id);

@@ -5,7 +5,7 @@
 import { FogClient } from '../js/core/client.js';
 import * as manual from '../js/manual.js';
 import { exportBackup, parseBackup } from '../js/backup.js';
-import { renderReport, PRESETS, BLOCKS } from '../js/report.js';
+import { renderReport, PRESETS, BLOCKS, subsOf } from '../js/report.js';
 
 // 基準值：原專案照片（test/legacy/photos.json）在 2026-11-21 圖資下的結果
 const BASE = {
@@ -162,7 +162,7 @@ async function run() {
         const maps = {};
         for (const lv of ['county', 'town', 'village']) maps[lv] = await fetch(DATA + `map_${lv}.json`).then(r => r.json());
         const stats = await fog.compute(records(photos), 'photo');
-        const missing = new Set(BLOCKS.filter(b => b.missingOn).map(b => b.id));
+        const missing = new Set(BLOCKS.filter(b => b.missing).map(b => b.id));   // 預設：全部顯示未達成
         const out = [];
         for (const theme of ['light', 'dark']) {
             window.photoTheme && window.photoTheme.set(theme);
@@ -182,6 +182,48 @@ async function run() {
                                { stats, meta: {}, maps: {} });
         const blob = await new Promise(ok => r.canvas.toBlob(ok, 'image/png'));
         return res(!!blob && blob.size > 1000, blob ? `${Math.round(blob.size / 1024)} KB` : '輸出失敗');
+    });
+    await check('報表', '進階選項：鐵路只留高鐵時圖變短、全關時區塊不畫', async () => {
+        const stats = await fog.compute(records(photos), 'photo');
+        const env = { stats, meta: {}, maps: {} };
+        const base = { blocks: new Set(['rail']), missing: new Set(['rail']), hideDates: false, nickname: '測試', mapLevel: 'town' };
+        const all = renderReport(base, env).height;
+        const keys = subsOf('rail', stats).map(x => x.key);
+        const hsr = renderReport({ ...base, subOff: { rail: keys.filter(k => k !== 'hsr') } }, env).height;
+        const none = renderReport({ ...base, subOff: { rail: keys } }, env).height;
+        const empty = renderReport({ ...base, blocks: new Set() }, env).height;
+        return res(hsr < all && none === empty, `全部 ${all}、只留高鐵 ${hsr}、全關 ${none}（沒有區塊 ${empty}）px`);
+    });
+    await check('報表', '進階選項：景點分區、國家公園與保護區分類別，關掉的子類別不畫', async () => {
+        const stats = await fog.compute(records(photos), 'photo');
+        const env = { stats, meta: {}, maps: {} };
+        const out = [];
+        let ok = true;
+        for (const id of ['landmark', 'nature']) {
+            const subs = subsOf(id, stats);
+            const base = { blocks: new Set([id]), missing: new Set([id]), hideDates: false, nickname: '測試', mapLevel: 'town' };
+            const all = renderReport(base, env).height;
+            const one = renderReport({ ...base, subOff: { [id]: subs.slice(1).map(x => x.key) } }, env).height;
+            const none = renderReport({ ...base, subOff: { [id]: subs.map(x => x.key) } }, env).height;
+            const empty = renderReport({ ...base, blocks: new Set() }, env).height;
+            ok = ok && subs.length > 1 && one < all && none === empty;
+            out.push(`${id}：${subs.map(x => x.label).join('、')}（全部 ${all}、只留${subs[0].label} ${one} px）`);
+        }
+        return res(ok, out.join('；'));
+    });
+    await check('報表', '進階選項：累積曲線開關、村里進度選一個縣市改列各鄉鎮', async () => {
+        const stats = await fog.compute(records(photos), 'photo');
+        const env = { stats, meta: {}, maps: {} };
+        const base = { blocks: new Set(['yearly']), missing: new Set(['villages']), hideDates: false, nickname: '測試', mapLevel: 'town' };
+        const on = renderReport(base, env).height, off = renderReport({ ...base, cumul: false }, env).height;
+        // 村里進度：各縣市 22 列；選第一個有足跡的縣市，列數＝該縣市鄉鎮數
+        const vb = { ...base, blocks: new Set(['villages']) };
+        const all = renderReport(vb, env).height;
+        const c = stats.counties.find(x => x.villages_unlocked > 0);
+        const towns = stats.towns.filter(t => t.county === c.code).length;
+        const one = renderReport({ ...vb, vCounty: c.code }, env).height;
+        const ok = on === off + 22 && one - all === (towns - stats.counties.length) * 34;
+        return res(ok, `每年新解鎖：有曲線 ${on}、無曲線 ${off} px；村里進度：各縣市 ${all}、${c.name}（${towns} 鄉鎮）${one} px`);
     });
 }
 

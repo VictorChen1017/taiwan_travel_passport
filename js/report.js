@@ -2,8 +2,10 @@
 //
 // - 全部在瀏覽器內用 Canvas 2D 繪製，不經伺服器；報表只放彙總結果（地名、日期），不含座標與照片
 // - 顏色依當下的淺色／深色主題（介面色取 css/theme.css 的 --c-*，資料色取 js/shared.js）
-// - 預設組合用選單切換，之後可以自己勾選區塊；每個區塊可選「顯示未達成」；可填暱稱
-// - 隱私控制：隱藏日期、隱藏「老地方」、迷霧地圖最細到鄉鎮；照片模式的鄉鎮・村里地圖可選「制霸五色」
+// - 預設組合用選單切換，之後可以自己勾選區塊；未達成預設顯示，勾選的區塊下方展開進階選項：隱藏未達成、選子項目（鐵路各區、各捷運系統等）
+// - 可填暱稱；沒填時預覽圖顯示淡色範例「小明的足跡」，匯出時不印
+// - 隱私控制：隱藏日期、隱藏「老地方」；照片模式的鄉鎮・村里地圖可選「制霸五色」
+// - 行政區尺度（迷霧地圖、每年新解鎖用）：縣市／鄉鎮／村里，旁邊「?」提醒村里容易看出住處
 //
 // 用法：
 //   const rp = createReport({ getStats: () => stats, loadMap: level => Promise<{viewBox, paths}>, getMeta: () => ({ from, to, mode, manual }) });
@@ -21,24 +23,24 @@ const MAX_HEIGHT = 30000;   // 瀏覽器畫布高度上限（Chrome 約 32,767�
 
 // ---------- 區塊與預設組合 ----------
 
-// missing：可勾「顯示未達成」；missingOn：預設就顯示未達成
+// missing：可在 ⚙ 進階選項隱藏未達成（預設顯示）；子項目見 subsOf
 export const BLOCKS = [
     { id: 'summary', label: '探索率摘要' },
     { id: 'map', label: '迷霧地圖' },
-    { id: 'yearly', label: '每年新解鎖' },
-    { id: 'conquer', label: '縣市制霸卡', missing: true, missingOn: true },
-    { id: 'villages', label: '村里探索進度（各縣市）', missing: true, missingOn: true },
+    { id: 'yearly', label: '每年新解鎖', adv: true },   // adv：沒有未達成，但有其他進階選項
+    { id: 'conquer', label: '縣市制霸卡', missing: true },
+    { id: 'villages', label: '村里探索進度', missing: true },
     { id: 'milestone', label: '里程碑', missing: true },
     { id: 'peak', label: '登山（百岳、小百岳）', missing: true },
-    { id: 'rail', label: '臺鐵・高鐵', missing: true, missingOn: true },
-    { id: 'metro', label: '捷運', missing: true, missingOn: true },
-    { id: 'lrt', label: '輕軌', missing: true, missingOn: true },
+    { id: 'rail', label: '鐵路', missing: true },
+    { id: 'metro', label: '捷運', missing: true },
+    { id: 'lrt', label: '輕軌', missing: true },
     { id: 'pole', label: '極點', missing: true },
     { id: 'island', label: '離島', missing: true },
     { id: 'landmark', label: '景點', missing: true },
     { id: 'bspot', label: 'B 級景點', missing: true },
     { id: 'nature', label: '國家公園與保護區', missing: true },
-    { id: 'travel', label: '旅行', missing: true },
+    { id: 'travel', label: '旅行成就', missing: true },
 ];
 export const PRESETS = [
     { id: 'overview', label: '足跡總覽', blocks: ['summary', 'map', 'yearly', 'conquer'] },
@@ -49,6 +51,43 @@ export const PRESETS = [
     { id: 'full', label: '完整', blocks: BLOCKS.map(b => b.id) },
 ];
 const UNIT_LABEL = { county: '縣市', town: '鄉鎮', village: '村里' };
+// 村里探索進度的縣市選單順序：六都（由北到南）、其他縣市（西部由北到南，再東部由北到南）、離島
+const COUNTY_ORDER = [
+    ['六都', ['63000', '65000', '68000', '66000', '67000', '64000']],   // 臺北、新北、桃園、臺中、臺南、高雄
+    ['其他縣市', ['10017', '10018', '10004', '10005', '10007', '10008', '10009', '10020', '10010', '10013', '10002', '10015', '10014']],
+    // 基隆、新竹市、新竹縣、苗栗、彰化、南投、雲林、嘉義市、嘉義縣、屏東、宜蘭、花蓮、臺東
+    ['離島', ['10016', '09020', '09007']],   // 澎湖、金門、連江
+];
+export const NICK_SAMPLE = '小明的足跡';   // 暱稱沒填時預覽用的範例
+
+// 進階選項的子項目：鐵路分臺鐵各區、高鐵、林鐵；登山、捷運、輕軌依成就卡（各山岳清單、各系統）
+const RAIL_SUBS = [
+    { key: 'hsr', label: '高鐵', ids: ['rail_hsr'] },
+    { key: 'tra_n', label: '臺鐵北部（含宜蘭線）', ids: ['rail_tra_wl_north', 'rail_tra_yilan'] },
+    { key: 'tra_c', label: '臺鐵中部（山線、海線）', ids: ['rail_tra_mountain', 'rail_tra_coast'] },
+    { key: 'tra_s', label: '臺鐵南部（含屏東線、南迴線）', ids: ['rail_tra_wl_south', 'rail_tra_pingtung', 'rail_tra_south_link'] },
+    { key: 'tra_e', label: '臺鐵東部（北迴線、臺東線）', ids: ['rail_tra_north_link', 'rail_tra_taitung'] },
+    { key: 'tra_b', label: '臺鐵支線', ids: ['rail_tra_pingxi', 'rail_tra_shenao', 'rail_tra_neiwan', 'rail_tra_jiji', 'rail_tra_shalun'] },
+    { key: 'afr', label: '阿里山林業鐵路', ids: ['rail_afr'] },
+];
+const SECTION_SUBS = new Set(['landmark', 'nature']);
+/** 區塊的子項目 [{ key, label, ids }]；沒有子項目回傳空陣列 */
+export function subsOf(blockId, stats) {
+    if (blockId === 'rail') return RAIL_SUBS;
+    if (!stats) return [];
+    // 景點（北中南東）、國家公園與保護區（各類別）：依成就的 section 分
+    if (SECTION_SUBS.has(blockId)) {
+        const list = stats.achievements.filter(a => a.group === blockId && !a.cells && a.section);
+        return [...new Set(list.map(a => a.section))].map(sec => ({ key: sec, label: sec, ids: list.filter(a => a.section === sec).map(a => a.id) }));
+    }
+    if (!['peak', 'metro', 'lrt'].includes(blockId)) return [];
+    return stats.achievements.filter(a => a.group === blockId && a.cells).map(a => ({ key: a.id, label: a.name, ids: [a.id] }));
+}
+/** 被進階選項關掉的成就卡 id（o.subOff：{ 區塊 id: [子項目 key] }） */
+function offCards(o, blockId, stats) {
+    const off = new Set(o.subOff?.[blockId] || []);
+    return new Set(subsOf(blockId, stats).filter(x => off.has(x.key)).flatMap(x => x.ids));
+}
 const MODE_LABEL = { photo: '照片模式', visit: '造訪模式' };
 
 const pad2 = n => String(n).padStart(2, '0');
@@ -161,12 +200,12 @@ function gridCols(width, minW, gap) {
 
 /**
  * 畫整張報表（g.dry 時只量）；回傳總高度
- * @param o 選項 { blocks: Set, missing: Set, hideDates, hideRegular, townMax, nickname, mapLevel, mapColor }
+ * @param o 選項 { blocks: Set, missing: Set（顯示未達成的區塊）, subOff: { 區塊: [子項目 key] }, hideDates, hideRegular, nickname, nickSample, mapLevel, mapColor }
  * @param env { stats, meta, maps: { level: {viewBox, paths} } }
  */
 function paint(g, o, env) {
     const { stats } = env;
-    o = { ...o, mapLevel: mapLevelOf(o), mapColor: mapColorOf(o, stats) };
+    o = { ...o, mapColor: mapColorOf(o, stats) };
     const C = g.c;
     const date = t => o.hideDates ? null : t ? fmtDate(t) : '時間不明';
     let y = PAD;
@@ -177,6 +216,12 @@ function paint(g, o, env) {
     y += 44;
     const nick = (o.nickname || '').trim();
     if (nick) { g.text(nick, PAD, y, { size: 46, weight: 'bold', color: C.strong, maxW: CW }); y += 64; }
+    else if (o.nickSample) {
+        // 預覽用：淡色範例，讓使用者看到暱稱的大小；匯出時不印
+        const w = g.text(NICK_SAMPLE, PAD, y, { size: 46, weight: 'bold', color: C.faint });
+        g.text('（暱稱範例，沒填不會出現在圖上）', PAD + w + 14, y + 22, { size: 16, color: C.faint });
+        y += 64;
+    }
     const m = env.meta || {};
     const info = [];
     if (m.from) info.push(`紀錄期間 ${o.hideDates ? `${yearOf(m.from)} ～ ${yearOf(m.to || m.from)} 年` : `${fmtDate(m.from)} ～ ${fmtDate(m.to || m.from)}`}`);
@@ -247,11 +292,9 @@ function paintSummary(g, y, { env, ach }) {
 
 // ---------- 迷霧地圖 ----------
 
-/** 實際使用的地圖層級：勾「最細到鄉鎮」時村里改用鄉鎮 */
-export const mapLevelOf = o => o.townMax && o.mapLevel === 'village' ? 'town' : o.mapLevel;
 /** 實際使用的上色：制霸五色只在照片模式的鄉鎮、村里 */
 const canConquer = (level, stats) => stats?.mode === 'photo' && level !== 'county' && !!stats.towns?.some(t => t.n !== undefined);
-export const mapColorOf = (o, stats) => o.mapColor === 'count' && canConquer(mapLevelOf(o), stats) ? 'count' : 'year';
+export const mapColorOf = (o, stats) => o.mapColor === 'count' && canConquer(o.mapLevel, stats) ? 'count' : 'year';
 
 function unlockedIndex(stats, level) {
     const list = level === 'county' ? stats.counties : level === 'town' ? stats.towns : stats.villages;
@@ -317,6 +360,7 @@ function paintMap(g, y, { o, env }) {
 // ---------- 每年新解鎖 ----------
 
 function paintYearly(g, y, { o, env }) {
+    const cumul = o.cumul !== false;   // 累積曲線（預設開）
     const level = o.mapLevel, C = g.c;
     const items = [...unlockedIndex(env.stats, level).values()].filter(v => v.first);
     const byYear = new Map();
@@ -328,16 +372,50 @@ function paintYearly(g, y, { o, env }) {
         const early = years.filter(yr => yr < EARLY_YEAR).reduce((s, yr) => s + byYear.get(yr), 0);
         if (early) { labels.push(`${EARLY_YEAR} 前`); vals.push(early); }
         for (let yr = Math.max(years[0], EARLY_YEAR); yr <= years[years.length - 1]; yr++) { labels.push(String(yr)); vals.push(byYear.get(yr) || 0); }
-        const H = 220, top = y0 + 26, max = Math.max(...vals, 1);
+        let top = y0 + 26;
+        if (cumul) {
+            // 圖例：長條＝當年新解鎖、折線＝累積（右側刻度）
+            g.rect(x, y0 + 4, 14, 11, { fill: YEARLY_BAR_COLOR, r: 2 });
+            let lx = x + 20 + g.text('當年新解鎖', x + 20, y0, { size: 14, color: C.muted }) + 18;
+            g.rect(lx, y0 + 9, 20, 2, { fill: C.text });
+            g.text('累積', lx + 26, y0, { size: 14, color: C.muted });
+            top += 22;
+        }
+        const H = 220, max = Math.max(...vals, 1);
         const bw = w / labels.length;
         const step = Math.ceil(labels.length / Math.max(1, Math.floor(w / 62)));
         g.rect(x, top + H, w, 1, { fill: C.border });
+        // 順序：長條 → 累積折線 → 長條上的數字（數字墊卡片底色，不被折線蓋住）
         vals.forEach((v, i) => {
             const h = v / max * H, bx = x + bw * i + bw * 0.15;
             if (v) g.rect(bx, top + H - h, bw * 0.7, h, { fill: YEARLY_BAR_COLOR, r: 3 });
-            if (v && bw >= 34) g.text(v.toLocaleString(), bx + bw * 0.35, top + H - h - 22, { size: 14, color: C.text, align: 'center' });
             if (i % step === 0 || i === labels.length - 1) g.text(labels[i], bx + bw * 0.35, top + H + 8, { size: 14, color: C.muted, align: 'center' });
         });
+        const barNumbers = () => vals.forEach((v, i) => {
+            if (!v || bw < 34) return;
+            const cx = x + bw * i + bw / 2, ty = top + H - v / max * H - 22, str = v.toLocaleString();
+            if (cumul) { const tw = g.width(str, 14); g.rect(cx - tw / 2 - 3, ty - 1, tw + 6, 19, { fill: C.surface, r: 4 }); }
+            g.text(str, cx, ty, { size: 14, color: C.text, align: 'center' });
+        });
+        if (!cumul) barNumbers();
+        if (cumul) {
+            // 累積折線：自己的比例（最高點＝總數），最後一點標數字
+            let acc = 0;
+            const cum = vals.map(v => (acc += v));
+            const pts = cum.map((v, i) => [x + bw * i + bw / 2, top + H - v / Math.max(acc, 1) * H]);
+            if (!g.dry) {
+                const ctx = g.ctx;
+                ctx.beginPath();
+                pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+                ctx.strokeStyle = C.text; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+                ctx.stroke();
+                ctx.fillStyle = C.text;
+                for (const [px, py] of pts) { ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill(); }
+            }
+            barNumbers();
+            const [lx, ly] = pts[pts.length - 1];
+            g.text(`累積 ${acc.toLocaleString()}`, Math.min(lx, x + w), ly - 24, { size: 14, weight: 'bold', color: C.text, align: 'right' });
+        }
         return top + H + 32;
     });
 }
@@ -353,6 +431,8 @@ function paintConquer(g, y, { ach, showMissing, date }) {
     const extra = ach.filter(x => x.group === 'conquer' && x.id !== 'conquer');
     return card(g, y, { title: '縣市制霸', color: GROUP_COLOR.conquer, right: `已制霸 ${a.progress} / ${a.target}` }, (x, y0, w) => {
         let yy = y0;
+        g.text('格子數字為鄉鎮進度：已解鎖鄉鎮市區 / 總數，全部解鎖即制霸', x, yy, { size: 15, color: C.muted });
+        yy += 30;
         if (!cells.length) yy = empty(g, x, yy, '還沒有制霸任何縣市（縣市內所有鄉鎮市區都解鎖）');
         else {
             const gap = 10, { cols, cw } = gridCols(w, 128, gap), ch = date(1) ? 74 : 58;
@@ -361,7 +441,7 @@ function paintConquer(g, y, { ach, showMissing, date }) {
                 g.rect(cx, cy, cw, ch, c.done ? { fill: C.accent, r: 10 } : { fill: C.surface3, stroke: C.borderStrong, r: 10, dash: [5, 4] });
                 const col = c.done ? C.onAccent : C.faint;
                 g.text(c.name, cx + cw / 2, cy + 9, { size: 19, weight: 'bold', color: col, align: 'center', maxW: cw - 10 });
-                g.text(c.done ? '✓ 制霸' : `${c.progress} / ${c.target}`, cx + cw / 2, cy + 35, { size: 14, color: col, align: 'center' });
+                g.text(c.done ? '✓ 制霸' : `鄉鎮 ${c.progress} / ${c.target}`, cx + cw / 2, cy + 35, { size: 14, color: col, align: 'center' });
                 if (c.done && date(1)) g.text(date(c.date), cx + cw / 2, cy + 53, { size: 12, color: col, align: 'center' });
             });
             yy += Math.ceil(cells.length / cols) * (ch + gap) - gap;
@@ -384,16 +464,20 @@ function paintConquer(g, y, { ach, showMissing, date }) {
 
 // ---------- 村里探索進度 ----------
 
-function paintVillages(g, y, { env, showMissing }) {
-    const C = g.c, s = env.stats.summary.village;
-    const list = [...env.stats.counties].sort((a, b) => b.villages_unlocked / b.villages - a.villages_unlocked / a.villages || a.code.localeCompare(b.code))
+function paintVillages(g, y, { o, env, showMissing }) {
+    const C = g.c, st = env.stats;
+    // 選了某個縣市（o.vCounty）：改列該縣市各鄉鎮；否則列各縣市
+    const county = o.vCounty ? st.counties.find(c => c.code === o.vCounty) : null;
+    const rows = county ? st.towns.filter(t => t.county === county.code) : st.counties;
+    const s = county ? { unlocked: county.villages_unlocked, total: county.villages } : st.summary.village;
+    const list = [...rows].sort((a, b) => (b.villages ? b.villages_unlocked / b.villages : 0) - (a.villages ? a.villages_unlocked / a.villages : 0) || a.code.localeCompare(b.code))
         .filter(c => showMissing || c.villages_unlocked > 0);
-    return card(g, y, { title: '村里探索進度', color: GROUP_COLOR.milestone, right: `${s.unlocked.toLocaleString()} / ${s.total.toLocaleString()} 村里` }, (x, y0, w) => {
+    return card(g, y, { title: county ? `村里探索進度・${county.name}各鄉鎮` : '村里探索進度', color: GROUP_COLOR.milestone, right: `${s.unlocked.toLocaleString()} / ${s.total.toLocaleString()} 村里` }, (x, y0, w) => {
         if (!list.length) return empty(g, x, y0, '還沒有解鎖任何村里');
         const rh = 34, nameW = 120, numW = 170, bx = x + nameW, bw = w - nameW - numW;
         list.forEach((c, i) => {
             const cy = y0 + i * rh, r = c.villages ? c.villages_unlocked / c.villages : 0;
-            g.text(c.name, x, cy + 4, { size: 18, color: r > 0 ? C.text : C.faint });
+            g.text(c.name, x, cy + 4, { size: 18, color: r > 0 ? C.text : C.faint, maxW: nameW - 8 });
             g.rect(bx, cy + 9, bw, 12, { fill: C.surface3, r: 6 });
             if (r > 0) g.rect(bx, cy + 9, Math.max(12, bw * r), 12, { fill: r >= 1 ? GROUP_COLOR.conquer : C.accent, r: 6 });
             g.text(`${c.villages_unlocked} / ${c.villages}（${(r * 100).toFixed(0)}%）`, x + w, cy + 5, { size: 15, color: C.muted, align: 'right' });
@@ -405,13 +489,14 @@ function paintVillages(g, y, { env, showMissing }) {
 // ---------- 徽章類（里程碑、地點類、旅行） ----------
 
 function paintBadgeGroup(group) {
-    return (g, y, { ach, showMissing, date }) => {
+    return (g, y, { o, env, ach, showMissing, date }) => {
         const C = g.c;
-        const all = ach.filter(a => a.group === group && !a.cells);
+        const off = offCards(o, group, env.stats);   // 進階選項關掉的子類別
+        const all = ach.filter(a => a.group === group && !a.cells && !off.has(a.id));
         if (!all.length) return y - 22;
         const list = all.filter(a => showMissing || a.done);
         const done = all.filter(a => a.done).length;
-        return card(g, y, { title: GROUP_LABEL[group], color: GROUP_COLOR[group], right: `${done} / ${all.length}` }, (x, y0, w) => {
+        return card(g, y, { title: BLOCKS.find(b => b.id === group)?.label || GROUP_LABEL[group], color: GROUP_COLOR[group], right: `${done} / ${all.length}` }, (x, y0, w) => {
             if (!list.length) return empty(g, x, y0, '還沒有達成這一類的成就');
             // 有兩個以上分區才加小標題；里程碑的名稱已含縣市／鄉鎮／村里，不分（排在一起比較緊湊）
             const secOf0 = a => a.section || '';
@@ -488,7 +573,8 @@ function isLight(hex) {
 
 function paintPeaks(g, y, opt) {
     const { ach, showMissing } = opt;
-    const lists = ach.filter(a => a.group === 'peak' && a.cells);
+    const off = offCards(opt.o, 'peak', opt.env.stats);
+    const lists = ach.filter(a => a.group === 'peak' && a.cells && !off.has(a.id));
     if (!lists.length) return y - 22;
     const C = g.c;
     const ps = POINT_STAMPS.peak;
@@ -510,12 +596,14 @@ function paintRail(group) {
     return (g, y, opt) => {
         const { ach, showMissing, date } = opt;
         const C = g.c;
-        const cards = ach.filter(a => a.group === group && a.cells);
+        const off = offCards(opt.o, group, opt.env.stats);
+        const cards = ach.filter(a => a.group === group && a.cells && !off.has(a.id));
         if (!cards.length) return y - 22;
-        const routes = ach.filter(a => a.group === group && !a.cells && a.section === '路線制霸');
+        // 路線制霸的 id 是「成就卡 id_路線」
+        const routes = ach.filter(a => a.group === group && !a.cells && a.section === '路線制霸' && ![...off].some(id => a.id.startsWith(id + '_')));
         const cells = cards.flatMap(a => a.cells);
         const shown = cards.filter(a => showMissing || a.progress > 0);
-        return card(g, y, { title: GROUP_LABEL[group], color: GROUP_COLOR[group], right: `已到站 ${cells.filter(c => c.done).length} / ${cells.length} 站` }, (x, y0, w) => {
+        return card(g, y, { title: BLOCKS.find(b => b.id === group)?.label || GROUP_LABEL[group], color: GROUP_COLOR[group], right: `已到站 ${cells.filter(c => c.done).length} / ${cells.length} 站` }, (x, y0, w) => {
             let yy = y0;
             // 路線制霸：只列達成的路線
             const doneRoutes = routes.filter(r => r.done);
@@ -607,19 +695,18 @@ function loadPref() {
 }
 function savePref(o) {
     try {
-        localStorage.setItem(PREF_KEY, JSON.stringify({ preset: o.preset, blocks: [...o.blocks], missing: [...o.missing],
-            hideDates: o.hideDates, hideRegular: o.hideRegular, townMax: o.townMax, nickname: o.nickname, mapLevel: o.mapLevel, mapColor: o.mapColor }));
+        localStorage.setItem(PREF_KEY, JSON.stringify({ preset: o.preset, blocks: [...o.blocks], hideMissing: [...o.hideMissing], subOff: o.subOff, cumul: o.cumul, vCounty: o.vCounty,
+            hideDates: o.hideDates, hideRegular: o.hideRegular, nickname: o.nickname, mapLevel: o.mapLevel, mapColor: o.mapColor }));
     } catch (e) { /* 存不了只影響下次 */ }
 }
 
-// 手機（觸控）且瀏覽器能分享檔案：按鈕改為「分享到 IG／Threads」，叫出系統分享選單；電腦一律下載
+// 手機（觸控）且瀏覽器能分享檔案：按鈕改為「分享／儲存」，叫出系統分享選單（可傳到 App 或存到相簿）；電腦一律下載
 function canShareFile(file = new File([''], 'a.png', { type: 'image/png' })) {
     const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
     try { return !!(touch && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
 }
 
 const presetBlocks = id => new Set((PRESETS.find(p => p.id === id) || PRESETS[0]).blocks);
-const defaultMissing = () => new Set(BLOCKS.filter(b => b.missingOn).map(b => b.id));
 
 export function createReport({ getStats, loadMap, getMeta }) {
     let modal = null, timer = null, last = null, lastMs = 0;
@@ -627,10 +714,12 @@ export function createReport({ getStats, loadMap, getMeta }) {
     const o = {
         preset: p.preset || 'overview',
         blocks: p.blocks ? new Set(p.blocks) : presetBlocks('overview'),
-        missing: p.missing ? new Set(p.missing) : defaultMissing(),
+        hideMissing: new Set(p.hideMissing || []),   // 隱藏未達成的區塊（預設都顯示；舊版的 missing 不沿用）
+        subOff: p.subOff && typeof p.subOff === 'object' ? p.subOff : {},   // 進階選項關掉的子項目
+        cumul: p.cumul ?? true,          // 每年新解鎖：累積曲線
+        vCounty: p.vCounty || '',        // 村里探索進度：只看這個縣市的各鄉鎮（空＝各縣市）
         hideDates: !!p.hideDates,
         hideRegular: p.hideRegular ?? true,
-        townMax: p.townMax ?? true,
         mapColor: p.mapColor || 'year',
         nickname: p.nickname || '',
         mapLevel: p.mapLevel || 'town',
@@ -652,22 +741,25 @@ export function createReport({ getStats, loadMap, getMeta }) {
                     <div class="rp-opts">
                         <fieldset class="rp-privacy">
                             <legend>🔒 隱私控制</legend>
-                            <label class="rp-check"><input type="checkbox" id="rp-hide"> 隱藏日期</label>
+                            <label class="rp-check"><input type="checkbox" id="rp-hide"> 隱藏日期
+                                <button type="button" class="qtip" data-tip="紀錄時間點只寫年份，避免別人從日期推出你的行程。" aria-label="說明：隱藏日期">?</button></label>
                             <label class="rp-check" id="rp-regular-row"><input type="checkbox" id="rp-regular"> 隱藏「老地方」</label>
-                            <label class="rp-check"><input type="checkbox" id="rp-townmax"> 迷霧地圖最細到鄉鎮</label>
                             <label class="rp-field" id="rp-color-row">地圖上色
                                 <select id="rp-color"><option value="year">首次解鎖年份</option><option value="count">制霸五色（照片張數，看得出常去的地方）</option></select></label>
                         </fieldset>
                         <label class="rp-field">預設組合
                             <select id="rp-preset">${PRESETS.map(x => `<option value="${x.id}">${x.label}</option>`).join('')}<option value="custom">自訂</option></select></label>
                         <label class="rp-field">暱稱（選填）
-                            <input type="text" id="rp-nick" maxlength="24" placeholder="例如：小明的足跡"></label>
-                        <label class="rp-field">迷霧地圖、每年新解鎖
-                            <select id="rp-level"><option value="county">縣市</option><option value="town">鄉鎮</option><option value="village">村里</option></select></label>
-                        <div class="rp-blocks-title">區塊 <small>右欄勾選＝顯示未達成</small></div>
+                            <input type="text" id="rp-nick" maxlength="24" placeholder="例如：${NICK_SAMPLE}"></label>
+                        <div class="rp-field" role="radiogroup" aria-labelledby="rp-level-title"><span id="rp-level-title">行政區尺度（迷霧地圖、每年新解鎖）</span>
+                            <div class="rp-seg" id="rp-level">${[['county', '縣市'], ['town', '鄉鎮'], ['village', '村里']].map(([v, t]) => `
+                                <label><input type="radio" name="rp-level" value="${v}"> ${t}${v === 'village'
+                                    ? ' <button type="button" class="qtip" data-tip="村里範圍很小，容易被看出住處或常去的地方。" aria-label="說明：村里">?</button>' : ''}</label>`).join('')}
+                            </div></div>
+                        <div class="rp-blocks-title">區塊 <small>勾選後可在下方隱藏未達成、選項目</small></div>
                         <ul class="rp-blocks" id="rp-blocks">${BLOCKS.map(b => `
                             <li><label class="rp-check"><input type="checkbox" data-block="${b.id}"> ${esc(b.label)}</label>
-                                ${b.missing ? `<label class="rp-miss" title="顯示未達成的項目"><input type="checkbox" data-miss="${b.id}"> 未達成</label>` : ''}</li>`).join('')}
+                                ${b.missing || b.adv ? `<div class="rp-adv" data-adv="${b.id}" hidden></div>` : ''}</li>`).join('')}
                         </ul>
                     </div>
                     <div class="rp-preview">
@@ -678,32 +770,39 @@ export function createReport({ getStats, loadMap, getMeta }) {
                 <div class="rp-foot">
                     <span class="rp-size" id="rp-size"></span>
                     <button type="button" class="rp-btn" data-act="close">關閉</button>
-                    <button type="button" class="rp-btn primary" id="rp-save">${canShareFile() ? '📤 分享到 IG／Threads' : '⬇ 下載 PNG'}</button>
+                    <button type="button" class="rp-btn primary" id="rp-save">${canShareFile() ? '📤 分享／儲存' : '⬇ 下載 PNG'}</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
+        const $ = id => modal.querySelector('#' + id);
         modal.addEventListener('click', e => {
             if (e.target === modal || e.target.dataset.act === 'close') close();
         });
         document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal && !modal.hidden) close(); });
-        const $ = id => modal.querySelector('#' + id);
         $('rp-preset').addEventListener('change', e => {
             if (e.target.value === 'custom') { o.preset = 'custom'; return; }
             o.preset = e.target.value;
             o.blocks = presetBlocks(o.preset);
-            o.missing = defaultMissing();
             syncForm(); schedule();
         });
         $('rp-nick').addEventListener('input', e => { o.nickname = e.target.value; schedule(400); });
-        $('rp-level').addEventListener('change', e => { o.mapLevel = e.target.value; syncForm(); schedule(); });
+        $('rp-level').addEventListener('change', e => { if (e.target.name === 'rp-level') { o.mapLevel = e.target.value; syncForm(); schedule(); } });
         $('rp-hide').addEventListener('change', e => { o.hideDates = e.target.checked; schedule(); });
         $('rp-regular').addEventListener('change', e => { o.hideRegular = e.target.checked; schedule(); });
-        $('rp-townmax').addEventListener('change', e => { o.townMax = e.target.checked; syncForm(); schedule(); });
         $('rp-color').addEventListener('change', e => { o.mapColor = e.target.value; schedule(); });
         $('rp-blocks').addEventListener('change', e => {
             const t = e.target;
             if (t.dataset.block) { t.checked ? o.blocks.add(t.dataset.block) : o.blocks.delete(t.dataset.block); o.preset = 'custom'; }
-            if (t.dataset.miss) t.checked ? o.missing.add(t.dataset.miss) : o.missing.delete(t.dataset.miss);
+            // 進階選項（勾選的區塊下方）：隱藏未達成、子項目
+            const id = t.closest('[data-adv]')?.dataset.adv;
+            if (id && t.dataset.hidemiss !== undefined) t.checked ? o.hideMissing.add(id) : o.hideMissing.delete(id);
+            if (t.dataset.cumul !== undefined) o.cumul = t.checked;
+            if (t.dataset.vcounty !== undefined) o.vCounty = t.value;
+            if (id && t.dataset.sub) {
+                const off = new Set(o.subOff[id] || []);
+                t.checked ? off.delete(t.dataset.sub) : off.add(t.dataset.sub);
+                if (off.size) o.subOff[id] = [...off]; else delete o.subOff[id];
+            }
             syncForm(); schedule();
         });
         $('rp-save').addEventListener('click', save);
@@ -717,24 +816,50 @@ export function createReport({ getStats, loadMap, getMeta }) {
         if (o.preset === 'custom' && same) o.preset = same.id;
         $('rp-preset').value = o.preset;
         $('rp-nick').value = o.nickname;
-        $('rp-level').value = mapLevelOf(o);
-        $('rp-level').querySelector('option[value="village"]').disabled = o.townMax;
+        modal.querySelectorAll('[name="rp-level"]').forEach(r => { r.checked = r.value === o.mapLevel; });
         $('rp-hide').checked = o.hideDates;
         $('rp-regular').checked = o.hideRegular;
-        $('rp-townmax').checked = o.townMax;
         const stats = getStats();
         $('rp-regular-row').hidden = stats?.mode !== 'photo';   // 老地方只在照片模式
         $('rp-color-row').hidden = stats?.mode !== 'photo';
         $('rp-color').value = o.mapColor;
-        $('rp-color').disabled = !(o.blocks.has('map') && canConquer(mapLevelOf(o), stats));
+        $('rp-color').disabled = !(o.blocks.has('map') && canConquer(o.mapLevel, stats));
         modal.querySelectorAll('[data-block]').forEach(b => { b.checked = o.blocks.has(b.dataset.block); });
-        modal.querySelectorAll('[data-miss]').forEach(b => {
-            b.checked = o.missing.has(b.dataset.miss);
-            b.disabled = !o.blocks.has(b.dataset.miss);
+        // 進階選項：區塊有勾才展開
+        modal.querySelectorAll('[data-adv]').forEach(box => {
+            const id = box.dataset.adv, off = o.subOff[id] || [];
+            box.hidden = !o.blocks.has(id);
+            const hm = box.querySelector('[data-hidemiss]');
+            if (hm) hm.checked = o.hideMissing.has(id);
+            const cu = box.querySelector('[data-cumul]');
+            if (cu) cu.checked = o.cumul;
+            const vc = box.querySelector('[data-vcounty]');
+            if (vc) vc.value = vc.querySelector(`option[value="${o.vCounty}"]`) ? o.vCounty : '';
+            box.querySelectorAll('[data-sub]').forEach(c => { c.checked = !off.includes(c.dataset.sub); });
         });
         const needMap = o.blocks.has('map') || o.blocks.has('yearly');
-        $('rp-level').disabled = !needMap;
+        modal.querySelectorAll('[name="rp-level"]').forEach(r => { r.disabled = !needMap; });
+        $('rp-level').classList.toggle('off', !needMap);
     }
+
+    /** 各區塊的進階選項內容（子項目依資料而定，每次打開彈窗重畫） */
+    function renderAdv() {
+        const stats = getStats();
+        modal.querySelectorAll('[data-adv]').forEach(box => {
+            const id = box.dataset.adv, b = BLOCKS.find(x => x.id === id);
+            const subs = subsOf(id, stats);
+            box.innerHTML = (id === 'yearly' ? '<label class="rp-check"><input type="checkbox" data-cumul> 累積曲線</label>' : '')
+                + (id === 'villages' && stats ? `<label class="rp-field">縣市<select data-vcounty>
+                    <option value="">全部縣市</option>
+                    ${COUNTY_ORDER.map(([g, codes]) => `<optgroup label="${g}">${codes.map(code => stats.counties.find(c => c.code === code))
+                        .filter(Boolean).map(c => `<option value="${esc(c.code)}">${esc(c.name)}</option>`).join('')}</optgroup>`).join('')}</select></label>` : '')
+                + (b.missing ? '<label class="rp-check"><input type="checkbox" data-hidemiss> 隱藏未達成</label>' : '')
+                + subs.map(x => `<label class="rp-check"><input type="checkbox" data-sub="${esc(x.key)}"> ${esc(x.label)}</label>`).join('');
+        });
+    }
+
+    /** 給畫圖用的選項：missing 為顯示未達成的區塊 */
+    const paintOpts = extra => ({ ...o, missing: new Set(BLOCKS.filter(b => b.missing && !o.hideMissing.has(b.id)).map(b => b.id)), ...extra });
 
     function schedule(ms = 120) {
         clearTimeout(timer);
@@ -755,20 +880,20 @@ export function createReport({ getStats, loadMap, getMeta }) {
         }
         $('rp-status').hidden = false;
         $('rp-status').textContent = '產生中…';
-        const level = mapLevelOf(o);
+        const level = o.mapLevel;
         if (o.blocks.has('map') && !maps[level]) {
             try { maps[level] = await loadMap(level); } catch (e) { /* 地圖載入失敗時區塊顯示「載入中」 */ }
         }
         const stats = getStats();
         if (!stats) return;
         const t0 = performance.now();
-        const r = renderReport(o, { stats, meta: getMeta(), maps });
+        const r = renderReport(paintOpts({ nickSample: true }), { stats, meta: getMeta(), maps });
         last = r;
         r.canvas.className = 'rp-img';
         $('rp-canvas').innerHTML = '';
         $('rp-canvas').appendChild(r.canvas);
         $('rp-status').hidden = !r.tooTall;
-        if (r.tooTall) $('rp-status').textContent = '⚠ 內容太長，超出的部分被截掉了；請減少區塊或關掉「未達成」';
+        if (r.tooTall) $('rp-status').textContent = '⚠ 內容太長，超出的部分被截掉了；請減少區塊，或在區塊下方隱藏未達成、減少項目';
         $('rp-save').disabled = false;
         $('rp-size').textContent = `${W} × ${r.height.toLocaleString()} px${r.height > 8000 ? '・圖片很長，部分手機 App 可能無法完整顯示' : ''}`;
         lastMs = Math.round(performance.now() - t0);
@@ -776,7 +901,9 @@ export function createReport({ getStats, loadMap, getMeta }) {
 
     async function save() {
         if (!last) return;
-        const blob = await new Promise(res => last.canvas.toBlob(res, 'image/png'));
+        // 預覽圖有暱稱範例時，匯出用不含範例的版本重畫
+        const out = (o.nickname || '').trim() ? last : renderReport(paintOpts(), { stats: getStats(), meta: getMeta(), maps });
+        const blob = await new Promise(res => out.canvas.toBlob(res, 'image/png'));
         if (!blob) { alert('無法產生圖片（可能是內容太長），請減少區塊後再試。'); return; }
         const filename = `台灣旅遊護照成就報表-${todayStr()}.png`;
         const file = new File([blob], filename, { type: 'image/png' });
@@ -793,6 +920,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
 
     function open() {
         if (!modal) build();
+        renderAdv();
         syncForm();
         modal.hidden = false;
         document.body.classList.add('ex-modal-open');

@@ -11,12 +11,12 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
 <link rel="stylesheet" href="css/theme.css?v=20261120">
-<link rel="stylesheet" href="css/explore.css?v=20261121e">
-<link rel="stylesheet" href="css/app.css?v=20261121h">
-<link rel="stylesheet" href="css/report.css?v=20261121b">
+<link rel="stylesheet" href="css/explore.css?v=20261121f">
+<link rel="stylesheet" href="css/app.css?v=20261121j">
+<link rel="stylesheet" href="css/report.css?v=20261121h">
 <!-- 主題在畫面出現前套用，避免先閃白 -->
 <script src="js/theme.js?v=20261120"></script>
-<script type="module" src="js/app.js?v=20261121l"></script>
+<script type="module" src="js/app.js?v=20261121t"></script>
 </head>
 <body>
 
@@ -29,7 +29,7 @@
             <button type="button" data-mode="photo" title="只用照片計算（含以張數計算的成就）">照片<span class="long">模式</span></button>
             <button type="button" data-mode="visit" title="照片與時間軸合併，任一筆紀錄就算造訪">造訪<span class="long">模式</span></button>
         </div>
-        <a class="app-btn" id="helpBtn" href="help.html" title="使用說明">❓ <span>說明</span></a>
+        <a class="app-btn" id="helpBtn" href="help.html" target="_blank" rel="noopener" title="使用說明（另開分頁）">❓ <span>說明</span></a>
         <button type="button" class="app-btn" id="reportBtn" title="把成就做成一張 PNG 圖片分享（只含地名與日期）" hidden>📤 <span>分享成就</span></button>
         <button type="button" class="app-btn" id="importBtn" hidden>📂 <span>匯入資料</span></button>
         <button type="button" class="app-iconbtn" data-theme-toggle title="切換淺色／深色模式" aria-label="切換淺色／深色模式">
@@ -47,7 +47,7 @@
         <section class="app-landing" id="landing">
             <div class="app-hero">
                 <h1>🛂 台灣旅遊護照</h1>
-                <p>匯入照片或 Google 時間軸，看看你走過台灣的哪些地方。<a href="help.html">第一次使用？看說明 →</a></p>
+                <p>匯入照片或 Google 時間軸，看看你走過台灣的哪些地方。<a href="help.html" target="_blank" rel="noopener">第一次使用？看說明 →</a></p>
             </div>
 
             <!-- 本機運算說明：預設收起，只留第一行 -->
@@ -56,7 +56,7 @@
                 <ul>
                     <li>所有計算都在你的瀏覽器裡完成，<b>不會上傳</b>任何照片、座標或時間。</li>
                     <li>本網站<b>不使用任何追蹤或分析工具</b>，也沒有後端伺服器。</li>
-                    <li>網站只會下載公開的圖資（村里界線、成就設定）；明細小地圖會向 OpenStreetMap 載入地圖圖磚。完整清單見<a href="help.html#privacy">說明頁</a>。</li>
+                    <li>網站只會下載公開的圖資（村里界線、成就設定）；明細小地圖會向 OpenStreetMap 載入地圖圖磚。完整清單見<a href="help.html#privacy" target="_blank" rel="noopener">說明頁</a>。</li>
                     <li>匯入結果只存在這個瀏覽器，可以隨時刪除。</li>
                 </ul>
             </details>
@@ -124,7 +124,7 @@
                         <ul>
                             <li>手機（目前的時間軸存在手機上）：Google 地圖 → 你的時間軸 → 右上角「⋮」或設定 → 匯出時間軸資料，得到 Timeline.json（Android）或 location-history.json（iPhone）。</li>
                             <li>舊版：Google Takeout 匯出的「位置記錄」，Records.json 或「Semantic Location History」裡每月一個的 JSON（可一次選多個檔，或把資料夾拖進來）。</li>
-                            <li>預設只算停留過的地點；可信度太低的停留點不算。移動時經過的點（例如坐車經過的鄉鎮）可在成就目錄打開「包含移動途中」。</li>
+                            <li>預設只算停留過的地點；可信度太低的停留點不算。移動時經過的點（例如坐車經過的鄉鎮）可在成就目錄打開「包含移動路徑」。</li>
                             <li>不會保存 Google 標記的地點類型（住家、公司等），只用座標與時間。</li>
                         </ul>
                     </details>
@@ -172,7 +172,7 @@
 </div>
 
 <footer class="app-foot">
-    <p>🔒 本機運算，資料不會離開你的電腦；不使用追蹤或分析工具。　<a href="help.html">使用說明</a>・<a href="help.html#privacy">隱私與對外連線</a></p>
+    <p>🔒 本機運算，資料不會離開你的電腦；不使用追蹤或分析工具。　<a href="help.html" target="_blank" rel="noopener">使用說明</a>・<a href="help.html#privacy" target="_blank" rel="noopener">隱私與對外連線</a></p>
     <p class="app-credits">圖資：村里、鄉鎮、縣市界線（內政部國土測繪中心，政府資料開放授權）；國家公園、保護區（內政部國家公園署、農業部林業及自然保育署）；
         車站（交通部）；山頂與地點座標（Wikidata、© OpenStreetMap 貢獻者）；地圖圖磚 © OpenStreetMap。</p>
 </footer>
