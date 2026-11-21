@@ -19,6 +19,9 @@ const readPathPref = () => { try { return localStorage.getItem(PATH_KEY) === '1'
 const DATA = new URL('../data/', import.meta.url).href;
 const SOURCE_ICON = { exif: '📁', gphotos: '🖼️', gtimeline: '🗺️', manual: '✋' };
 const PHOTO_TYPES = new Set(['exif', 'gphotos']);
+// 手機照片（補點）：type 'exif'、id 固定 'phone'，每次選的照片追加進同一份（備份以 id 保留）
+const PHONE_ID = 'phone';
+const sourceIcon = s => s.id === PHONE_ID ? '📱' : (SOURCE_ICON[s.type] || '📄');
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -210,8 +213,58 @@ async function removeManual(ref) {
 /** 毫秒時間 → 本機日期時間（給使用者看的匯入時間） */
 const ymdLocal = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
-/** 照片資料夾：取得檔案清單 → 解析 EXIF → 加入來源 */
-async function importFolder(getItems, name) {
+/**
+ * 手機照片：把這次讀到的照片追加進「手機照片」來源（座標與時間都相同的視為同一張，不重複加入）
+ * @returns 新加入的筆數
+ */
+async function addPhone(src) {
+    const now = Date.now();
+    const old = app.sources.find(s => s.id === PHONE_ID);
+    if (!old) {
+        Object.assign(src, { id: PHONE_ID, name: '手機照片', added: now, updated: now });
+        app.sources.push(src);
+        await saveSource(src);
+        renderSources();
+        await compute();
+        return src.records.lat.length;
+    }
+    const A = old.records, B = src.records;
+    const seen = new Set();
+    for (let i = 0; i < A.lat.length; i++) seen.add(`${A.lat[i]},${A.lng[i]},${A.time[i]}`);
+    const lat = Array.from(A.lat), lng = Array.from(A.lng), time = Array.from(A.time);
+    let dup = 0;
+    for (let i = 0; i < B.lat.length; i++) {
+        const key = `${B.lat[i]},${B.lng[i]},${B.time[i]}`;
+        if (seen.has(key)) { dup++; continue; }
+        seen.add(key);
+        lat.push(B.lat[i]); lng.push(B.lng[i]); time.push(B.time[i]);
+    }
+    const added = lat.length - A.lat.length;
+    if (!added) return 0;
+    // 統計：檔案數類的累加；時間範圍、台灣範圍內、沒有時間的張數依合併後重算
+    const a = old.stats || {}, b = src.stats || {};
+    const sum = k => (a[k] || 0) + (b[k] || 0);
+    let from = null, to = null, noTime = 0, taiwan = 0;
+    for (let i = 0; i < lat.length; i++) {
+        const t = time[i];
+        if (t > 0) { if (from === null || t < from) from = t; if (to === null || t > to) to = t; }
+        if (Number.isNaN(t)) noTime++;
+        if (lat[i] >= 10 && lat[i] <= 26.5 && lng[i] >= 114 && lng[i] <= 124.7) taiwan++;
+    }
+    old.stats = {
+        files: sum('files'), photos: sum('photos'), noGps: sum('noGps'), failed: sum('failed'), videos: sum('videos'), other: sum('other'),
+        duplicates: sum('duplicates') + dup, located: lat.length, noTime, taiwan, from, to,
+    };
+    old.records = { lat: Float64Array.from(lat), lng: Float64Array.from(lng), time: Float64Array.from(time), kind: new Uint8Array(lat.length) };
+    old.updated = now;
+    await saveSource(old);
+    renderSources();
+    await compute();
+    return added;
+}
+
+/** 照片資料夾：取得檔案清單 → 解析 EXIF → 加入來源；phone 為 true 時追加進「手機照片」 */
+async function importFolder(getItems, name, { phone = false } = {}) {
     const ctrl = new AbortController();
     app.abort = ctrl;
     busy('尋找照片中…', { cancel: true });
@@ -237,7 +290,9 @@ async function importFolder(getItems, name) {
             alert(`讀完 ${n0(src.stats.photos)} 張照片，但都沒有 GPS 座標。\n（手機相機要開啟「位置」才會記錄拍攝地點）`);
             return;
         }
-        await addSource(src);
+        if (phone) {
+            if (!await addPhone(src)) alert('這些照片的足跡都已經加入過了，沒有新增。');
+        } else await addSource(src);
     } catch (e) {
         busy(null);
         if (e.name === 'AbortError') return;
@@ -310,7 +365,7 @@ function renderSources() {
     $('sourceList').innerHTML = app.sources.map(s => `
         <li data-id="${esc(s.id)}">
             <input type="checkbox" aria-label="選取「${esc(s.name || '未命名')}」">
-            <span class="icon">${SOURCE_ICON[s.type] || '📄'}</span>
+            <span class="icon">${sourceIcon(s)}</span>
             <div><div class="name">${esc(s.name || '未命名')}</div><div class="meta">${sourceSummary(s)}<br><span class="upd">最後更新 ${ymdLocal(updatedOf(s))}</span></div></div>
         </li>`).join('');
     updateSelection();
@@ -618,6 +673,19 @@ function bindUi() {
         importFolder(onFound => exif.filesFromDrop(dt, onFound), '拖曳的資料夾');
     });
 
+    // 手機照片（補點）：只在觸控裝置顯示；從相簿選（iOS 會把 HEIC 轉成 JPEG）或從檔案選（原始檔）
+    if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) $('phoneCard').hidden = false;
+    for (const [btn, input] of [['phoneAlbumBtn', 'phoneAlbumInput'], ['phoneFileBtn', 'phoneFileInput']]) {
+        $(btn).addEventListener('click', () => $(input).click());
+        $(input).addEventListener('change', e => {
+            const files = e.target.files;
+            if (!files || !files.length) return;
+            const items = exif.filesFromInput(files);
+            e.target.value = '';
+            importFolder(async () => items, '手機照片', { phone: true });
+        });
+    }
+
     // Google 時間軸：選檔（可多選）或拖曳檔案／資料夾
     $('timelineBtn').addEventListener('click', () => $('timelineInput').click());
     $('timelineInput').addEventListener('change', e => {
@@ -656,7 +724,7 @@ function bindUi() {
     // 開發用：載入原專案的測試資料（不存進 IndexedDB）
     if (new URLSearchParams(location.search).has('dev')) {
         $('devBox').hidden = false;
-        window.__fogDev = { importFolder, importTimeline, importBackup, addSource, app };   // 開發測試用（自動化測試匯入流程）
+        window.__fogDev = { importFolder, importTimeline, importBackup, addSource, addPhone, app };   // 開發測試用（自動化測試匯入流程）
         $('devLegacy').addEventListener('click', async () => {
             busy('讀取測試資料…');
             try {

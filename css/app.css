@@ -530,6 +530,13 @@ a.app-btn {
     align-self: flex-start;
 }
 
+/* 一張卡片有兩個按鈕（手機照片：從相簿選／從檔案選） */
+.app-source-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .app-dev {
     margin-top: 24px;
     padding: 10px 14px;
