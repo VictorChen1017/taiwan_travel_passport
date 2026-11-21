@@ -384,20 +384,31 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
     }
 
     // 滑過顯示名稱與首次解鎖日期
+    // 觸控時不用滑鼠事件（手指按下會補送 mousemove，雙指縮放時會誤選）；觸控的選取由放大彈窗的「單指點一下」處理
     function bindHover(svg, tip, wrap) {
-        svg.addEventListener('mousemove', e => {
-            const code = e.target.dataset && e.target.dataset.code;
-            if (!code || svg._dragging) { tip.hidden = true; return; }
+        let touchAt = 0;
+        svg.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') touchAt = Date.now(); });
+        // 顯示某個區域的名稱與首次解鎖日期；el 為 null 時收起；同時標出選取的區域
+        svg._showTip = (el, cx, cy) => {
+            svg.querySelectorAll('path.sel').forEach(p => p.classList.remove('sel'));
+            const code = el && el.dataset && el.dataset.code;
+            if (!code) { tip.hidden = true; return; }
             const item = state.idx[svg._level].get(code);
             const on = item && (svg._level === 'village' || item.unlocked);
             const name = svg._names?.get(code) || code;
             tip.innerHTML = `<b>${esc(name)}</b><br>${on ? `首次解鎖 ${fmtDate(item.first)}` : '未解鎖'}`;
             const r = wrap.getBoundingClientRect();
-            tip.style.left = Math.min(e.clientX - r.left + 14, r.width - 200) + 'px';
-            tip.style.top = Math.min(e.clientY - r.top + 14, r.height - 50) + 'px';
+            tip.style.left = Math.max(4, Math.min(cx - r.left + 14, r.width - 200)) + 'px';
+            tip.style.top = Math.max(4, Math.min(cy - r.top + 14, r.height - 50)) + 'px';
             tip.hidden = false;
+            if (COARSE || Date.now() - touchAt < 1500) el.classList.add('sel');
+        };
+        svg.addEventListener('mousemove', e => {
+            if (Date.now() - touchAt < 1500) return;
+            if (svg._dragging) { tip.hidden = true; return; }
+            svg._showTip(e.target, e.clientX, e.clientY);
         });
-        svg.addEventListener('mouseleave', () => { tip.hidden = true; });
+        svg.addEventListener('mouseleave', () => { if (Date.now() - touchAt >= 1500) svg._showTip(null); });
     }
 
     // ---------- 放大彈窗：滾輪縮放、拖曳平移 ----------
@@ -460,13 +471,13 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         };
         // 以螢幕上的 (cx, cy) 為中心縮放；未指定時以畫面中心
         const zoom = (factor, cx, cy) => {
-            tip.hidden = true;
+            svg._showTip(null);
             const v = svg._vb;
             if (cx === undefined) { const r = svg.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
             setVb(placeAt(toSvg(cx, cy), cx, cy, v.w / factor, v));
         };
         const goRegion = k => {
-            tip.hidden = true;
+            svg._showTip(null);
             const b = svg._base, g = REGIONS[k].box;
             setVb(g ? regionBox(g) : { ...b });
             modal.querySelectorAll('[data-region]').forEach(x => x.classList.toggle('active', x.dataset.region === k));
@@ -479,7 +490,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
 
         // 拖曳（一指或滑鼠）與雙指縮放：記住每個按下的指標
         const pts = new Map();
-        let drag = null, pinch = null, lastTap = null;
+        let drag = null, pinch = null, lastTap = null, tapTimer = 0;
+        const unselect = () => { clearTimeout(tapTimer); svg._showTip(null); };
         const mid = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 }; };
         svg.addEventListener('pointerdown', e => {
             lastType = e.pointerType;
@@ -492,7 +504,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 pinch = { d: m.d, vb: { ...svg._vb }, p: toSvg(m.x, m.y) };
                 drag = null;
                 lastTap = null;
-                tip.hidden = true;
+                unselect();
             }
         });
         svg.addEventListener('pointermove', e => {
@@ -509,7 +521,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
             if (!drag.moved && Math.hypot(dx, dy) < (e.pointerType === 'touch' ? 8 : 3)) return;
             drag.moved = svg._dragging = true;
-            tip.hidden = true;
+            unselect();
             svg.classList.add('dragging');
             const { s } = toSvg(0, 0, drag.vb);
             setVb({ ...drag.vb, x: drag.vb.x - dx * s, y: drag.vb.y - dy * s });
@@ -518,12 +530,17 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             pts.delete(e.pointerId);
             const tap = e.type === 'pointerup' && e.pointerType === 'touch' && drag && !drag.moved && !pinch;
             if (tap) {
-                // 連點放大：0.3 秒內、25px 內的第二下
+                // 連點放大：0.3 秒內、25px 內的第二下；單點則等 0.3 秒確定不是連點，才選取並顯示名稱
                 const now = Date.now();
+                clearTimeout(tapTimer);
                 if (lastTap && now - lastTap.t < 300 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 25) {
                     zoom(2, e.clientX, e.clientY);
                     lastTap = null;
-                } else lastTap = { t: now, x: e.clientX, y: e.clientY };
+                } else {
+                    lastTap = { t: now, x: e.clientX, y: e.clientY };
+                    const el = e.target, x = e.clientX, y = e.clientY;
+                    tapTimer = setTimeout(() => svg._showTip(el, x, y), 300);
+                }
             }
             if (pts.size < 2) pinch = null;
             if (pts.size === 1) {

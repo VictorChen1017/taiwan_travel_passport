@@ -4,7 +4,7 @@
 // 網址加 ?dev 會出現「載入原專案測試資料」（test/ 不會部署）
 
 import { FogClient } from './core/client.js';
-import { createExplore } from './explore.js';
+import { createExplore, GROUP_LABEL } from './explore.js';
 import { listSources, saveSource, removeSource, clearSources, newId } from './store.js';
 import * as exif from './adapters/exif.js';
 import * as gtl from './adapters/gtimeline.js';
@@ -470,39 +470,48 @@ function renderModeSeg() {
     seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.mode === app.mode));
 }
 
+/**
+ * 側邊欄（成就目錄）：匯入前後都顯示。
+ * 沒有資料時（還沒匯入、全部刪除）顯示骨架：入口按鈕照常，總覽與成就各類灰色、進度為「—」
+ */
 function renderToc() {
     const toc = $('toc');
-    const groups = app.explore.groups();
+    const ready = !!(app.explore && app.explore.data() && app.sources.length);
+    const groups = ready ? app.explore.groups() : Object.keys(GROUP_LABEL).map(g => ({ g, label: GROUP_LABEL[g] }));
+    const item = (href, label, attrs = '') => ready ? `<li><a href="${href}"${attrs}>${label}</a></li>` : `<li><span class="toc-off">${label}</span></li>`;
     toc.innerHTML = `
         <button type="button" class="app-btn toc-import" data-act="import">📂 匯入資料</button>
-        <button type="button" class="app-btn toc-report" data-act="report">🖼 成就報表</button>
+        ${ready ? '<button type="button" class="app-btn toc-report" data-act="report">🖼 成就報表</button>' : ''}
         <a class="app-btn toc-report toc-help" href="help.html">❓ 使用說明</a>
-        ${hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path" title="時間軸裡移動時經過的點（例如坐車經過的鄉鎮）也算解鎖">
+        ${ready && hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path" title="時間軸裡移動時經過的點（例如坐車經過的鄉鎮）也算解鎖">
             <input type="checkbox" id="pathToggle"${app.includePath ? ' checked' : ''}> 包含移動途中</label>` : ''}
+        ${ready ? '' : '<p class="toc-empty">🔒 匯入資料後解鎖以下內容</p>'}
         <h2>總覽</h2>
         <ul>
-            <li><a href="#ex-overview" data-go="overview">探索率</a></li>
-            <li><a href="#ex-mapcard">迷霧小地圖</a></li>
-            <li><a href="#ex-yearly-card">每年新解鎖</a></li>
-            <li><a href="#ex-detail-sec" data-go="detail">縣市・鄉鎮・村里明細</a></li>
+            ${item('#ex-overview', '探索率', ' data-go="overview"')}
+            ${item('#ex-mapcard', '迷霧小地圖')}
+            ${item('#ex-yearly-card', '每年新解鎖')}
+            ${item('#ex-detail-sec', '縣市・鄉鎮・村里明細', ' data-go="detail"')}
         </ul>
         <h2>成就</h2>
         <ul>
-            <li><a href="#ex-badges-sec" data-go="badges">全部成就</a></li>
-            ${groups.map(x => `<li><a href="#ach-${x.g}" data-group="${x.g}" style="--g:${GROUP_COLOR[x.g] || ''}">
+            ${item('#ex-badges-sec', '全部成就', ' data-go="badges"')}
+            ${groups.map(x => ready ? `<li><a href="#ach-${x.g}" data-group="${x.g}" style="--g:${GROUP_COLOR[x.g] || ''}">
                 <span>${esc(x.label)}</span><span class="n">${x.done} / ${x.total}${x.unit ? ' ' + x.unit : ''}</span>
-                <span class="bar"><i style="width:${x.total ? (x.done / x.total * 100).toFixed(1) : 0}%"></i></span></a></li>`).join('')}
+                <span class="bar"><i style="width:${x.total ? (x.done / x.total * 100).toFixed(1) : 0}%"></i></span></a></li>`
+                : `<li><span class="toc-off"><span>${esc(x.label)}</span><span class="n">—</span></span></li>`).join('')}
         </ul>`;
     toc.hidden = false;
     $('tocBtn').hidden = false;
 }
 
+/** 沒有資料：頂列的模式、匯入、報表按鈕收起；側邊欄改成骨架（不隱藏） */
 function hideToc() {
-    $('toc').hidden = true;
-    $('tocBtn').hidden = true;
     $('modeSeg').hidden = true;
     $('importBtn').hidden = true;
     $('reportBtn').hidden = true;
+    openToc(false);
+    renderToc();
 }
 
 function openToc(open) {
@@ -546,7 +555,7 @@ function bindUi() {
         if (e.target.closest('[data-act="import"]')) { openToc(false); showLanding(); return; }
         if (e.target.closest('[data-act="report"]')) { openToc(false); openReport(); return; }
         const a = e.target.closest('a');
-        if (!a) return;
+        if (!a || a.classList.contains('toc-help')) return;   // 使用說明：照連結換頁
         openToc(false);
         if ($('explore').hidden) showExplore();
         if (a.dataset.group) { e.preventDefault(); app.explore.jumpToGroup(a.dataset.group); return; }
@@ -672,6 +681,7 @@ async function start() {
     app.sources = await listSources();
     renderSources();
     if (app.sources.length) await compute();
+    else hideToc();   // 還沒匯入：側邊欄顯示骨架
 }
 
 start();

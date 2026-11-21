@@ -224,7 +224,15 @@
     fill-opacity: 0.75;
 }
 
-.ex-map path:hover {
+/* 滑鼠滑過才描邊；觸控裝置沒有 hover，改用單指點一下的 .sel（js/explore.js） */
+@media (hover: hover) {
+    .ex-map path:hover {
+        stroke: var(--ex-text);
+        stroke-width: 1.5px;
+    }
+}
+
+.ex-map path.sel {
     stroke: var(--ex-text);
     stroke-width: 1.5px;
 }
@@ -1285,7 +1293,13 @@ body.ex-modal-open {
     fill-opacity: 0.75;
 }
 
-.ex-modal .ex-map path:hover {
+@media (hover: hover) {
+    .ex-modal .ex-map path:hover {
+        stroke: var(--c-text);
+    }
+}
+
+.ex-modal .ex-map path.sel {
     stroke: var(--c-text);
 }
 

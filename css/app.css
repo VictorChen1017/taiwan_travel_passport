@@ -203,6 +203,26 @@ button {
     background: var(--c-link-hover-bg);
 }
 
+/* 還沒有資料時的目錄骨架：項目灰色、不能點 */
+.app-toc .toc-off {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 8px;
+    padding: 6px 8px;
+    color: var(--c-text-faint);
+    cursor: default;
+}
+
+.app-toc .toc-off .n {
+    color: var(--c-text-faint);
+}
+
+.app-toc .toc-empty {
+    margin: 0 8px 14px;
+    font-size: calc(13px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
 .app-toc .n {
     color: var(--c-text-muted);
     font-size: calc(12px * var(--fs, 1));
