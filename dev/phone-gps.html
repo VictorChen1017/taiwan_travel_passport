@@ -38,15 +38,12 @@
 <p class="muted">用正式的 EXIF Worker 讀照片的 GPS 與拍攝時間，看手機的相片挑選器有沒有把位置資訊剝掉。<br>
 照片只在這支手機的瀏覽器內讀取：不上傳、不儲存，關掉頁面就沒了。</p>
 
-<div class="bar">
-  <button type="button" class="btn primary" id="btnAlbum">📷 從相簿選</button>
-  <button type="button" class="btn" id="btnFiles">📁 從檔案選</button>
+<div class="bar" id="pickers">
   <button type="button" class="btn" data-theme-toggle title="切換淺色／深色模式" aria-label="切換淺色／深色模式">🌓</button>
 </div>
-<input type="file" id="inAlbum" accept="image/*" multiple>
-<input type="file" id="inFiles" multiple>
-<p class="muted">「從相簿選」：iOS 照片圖庫／Android 系統相片挑選器，可能剝除位置。<br>
-「從檔案選」：iOS 會開「檔案」App（可到「瀏覽 → 照片」或先把照片存到檔案），通常保留原始檔；Android 會開檔案管理員。</p>
+<p class="muted">每個按鈕的 accept 寫法不同，用來比較 iOS 會不會把 HEIC 轉成 JPEG（看結果的類型是 image/heic 還是 image/jpeg，以及按下打勾後要等多久）。<br>
+A：原本的寫法，會轉 JPEG。B、C：明確列出 HEIC。D：不設 accept，iOS 會跳出選單，可選「照片圖庫」或「選擇檔案」，兩種都可以各測一次。<br>
+建議每個按鈕都選同一批二三十張照片。</p>
 
 <div class="card">
   <div class="ua" id="ua"></div>
@@ -81,12 +78,13 @@ let last = null;   // 最近一次結果（給「複製摘要」用）
 async function run(files, source) {
     files = Array.from(files);
     if (!files.length) return;
-    $('btnAlbum').disabled = $('btnFiles').disabled = true;
+    const btns = document.querySelectorAll('[data-picker]');
+    btns.forEach(b => b.disabled = true);
     $('result').innerHTML = `<p class="muted">解析 ${files.length} 張中…</p>`;
     const t0 = performance.now();
     const r = await parse(files);
     const ms = Math.round(performance.now() - t0);
-    $('btnAlbum').disabled = $('btnFiles').disabled = false;
+    btns.forEach(b => b.disabled = false);
 
     const count = [0, 0, 0];
     let withTime = 0;
@@ -176,12 +174,27 @@ async function copySummary() {
     }
 }
 
-const bind = (btn, input, source) => {
-    $(btn).onclick = () => $(input).click();
-    $(input).onchange = e => { run(e.target.files, source); e.target.value = ''; };
-};
-bind('btnAlbum', 'inAlbum', '從相簿選');
-bind('btnFiles', 'inFiles', '從檔案選');
+// 測試用的 accept 寫法（null＝不設 accept）
+const PICKERS = [
+    ['A', 'image/*'],
+    ['B', 'image/heic,image/heif,image/jpeg,image/png'],
+    ['C', 'image/heic,image/heif,image/*'],
+    ['D', null],
+];
+const bar = $('pickers');
+const themeBtn = bar.querySelector('[data-theme-toggle]');
+for (const [key, accept] of PICKERS) {
+    const input = Object.assign(document.createElement('input'), { type: 'file', multiple: true });
+    if (accept != null) input.accept = accept;
+    const btn = Object.assign(document.createElement('button'), { type: 'button', className: 'btn' + (key === 'A' ? ' primary' : '') });
+    btn.textContent = `${key}｜${accept ?? '不設 accept'}`;
+    btn.dataset.picker = '';
+    const source = `${key}（accept：${accept ?? '不設'}）`;
+    btn.onclick = () => input.click();
+    input.onchange = e => { run(e.target.files, source); e.target.value = ''; };
+    bar.insertBefore(btn, themeBtn);
+    bar.append(input);
+}
 window.__phoneGpsRun = run;   // 桌機自動測試用
 </script>
 </body>
