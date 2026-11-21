@@ -250,7 +250,7 @@ function paintSummary(g, y, { env, ach }) {
 /** 實際使用的地圖層級：勾「最細到鄉鎮」時村里改用鄉鎮 */
 export const mapLevelOf = o => o.townMax && o.mapLevel === 'village' ? 'town' : o.mapLevel;
 /** 實際使用的上色：制霸五色只在照片模式的鄉鎮、村里 */
-const canConquer = (level, stats) => stats?.mode === 'photo' && level !== 'county';
+const canConquer = (level, stats) => stats?.mode === 'photo' && level !== 'county' && !!stats.towns?.some(t => t.n !== undefined);
 export const mapColorOf = (o, stats) => o.mapColor === 'count' && canConquer(mapLevelOf(o), stats) ? 'count' : 'year';
 
 function unlockedIndex(stats, level) {

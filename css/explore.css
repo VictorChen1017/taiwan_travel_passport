@@ -296,6 +296,11 @@
     background: linear-gradient(90deg, rgb(255, 226, 205), rgb(232, 74, 23));
 }
 
+/* 小地圖的圖例（含上色切換）放在地圖上方 */
+#ex-legend {
+    margin: 0 0 10px;
+}
+
 /* 制霸五色的色塊：白色要有外框才看得見 */
 .ex-legend .sw.lv {
     width: 14px;

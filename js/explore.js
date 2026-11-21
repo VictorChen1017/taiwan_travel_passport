@@ -48,7 +48,8 @@ const themeColor = name => window.photoTheme ? window.photoTheme.color(name) : '
 export function createExplore(root, { loadMap, loadDetail, manual: manualApi = null }) {
     // color：地圖上色 year＝首次解鎖年份、count＝制霸五色（照片張數；只在照片模式的鄉鎮、村里）
     const state = { unit: 'town', metric: 'count', color: 'year', data: null, maps: {}, idx: null };
-    const canConquer = level => state.data?.mode === 'photo' && level !== 'county';
+    // 計算結果要有張數 n（瀏覽器若還在用舊版 compute.js 會沒有，這時不提供五色，避免區域沒填色而畫成黑色）
+    const canConquer = level => state.data?.mode === 'photo' && level !== 'county' && state.data.towns.some(t => t.n !== undefined);
     const useConquer = level => state.color === 'count' && canConquer(level);
     let built = false;
 
@@ -98,6 +99,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             <div class="ex-grid">
                 <div class="ex-card ex-mapcard" id="ex-mapcard">
                     <div class="ex-card-title">迷霧小地圖 <small id="ex-map-note"></small></div>
+                    <div id="ex-legend" class="ex-legend"></div>
                     <div class="ex-mapwrap" id="ex-mapwrap" role="button" tabindex="0" title="點擊放大">
                         <svg id="ex-map" class="ex-map" preserveAspectRatio="xMidYMid meet"></svg>
                         <div id="ex-map-loading" class="ex-map-loading">載入地圖中…</div>
@@ -109,7 +111,6 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                         <div id="ex-tip" class="ex-tip" hidden></div>
                         <span class="ex-zoom-hint">🔍 點擊放大</span>
                     </div>
-                    <div id="ex-legend" class="ex-legend"></div>
                 </div>
                 <div class="ex-card ex-progress">
                     <div class="ex-card-title">探索率</div>
@@ -339,7 +340,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         for (const p of m.paths) {
             const item = idx.get(p.code);
             const on = item && (level === 'village' || item.unlocked);
-            const fill = !on ? null : useConquer(level) ? conquerColor(item.n || 0)
+            const fill = !on ? null : useConquer(level) ? conquerColor(item.n || 0) || '#ffcfb5'
                 : item.first ? yearColor(new Date(item.first * 1000).getUTCFullYear(), y0, y1) : '#ffcfb5';
             parts[on ? 'on' : 'off'].push(`<path d="${p.d}" data-code="${p.code}" class="${on ? 'on' : 'off'}"${fill ? ` style="fill:${fill}"` : ''}/>`);
         }
