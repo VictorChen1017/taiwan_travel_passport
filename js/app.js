@@ -686,7 +686,7 @@ function bindUi() {
         if (step === 'import') {
             $('sourcesTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
             // 第一次按「匯入資料」：跳出時間軸圖文教學（之後從時間軸卡片的「看圖文教學」再打開）
-            if (!guideSeen()) openGuide(() => $('timelineInput').click());
+            if (!guideSeen()) openGuide('timeline', () => $('timelineInput').click());
         }
         else if (step === 'view') compute();
         else if (step === 'share') {
@@ -787,7 +787,8 @@ function bindUi() {
 
     // Google 時間軸：選檔（可多選）或拖曳檔案／資料夾
     $('timelineBtn').addEventListener('click', () => $('timelineInput').click());
-    $('guideBtn').addEventListener('click', () => openGuide(() => $('timelineInput').click()));
+    $('guideBtn').addEventListener('click', () => openGuide('timeline', () => $('timelineInput').click()));
+    $('backupGuideBtn').addEventListener('click', () => openGuide('backup', () => $('backupInput').click()));
     $('timelineInput').addEventListener('change', e => {
         const files = [...(e.target.files || [])];
         e.target.value = '';

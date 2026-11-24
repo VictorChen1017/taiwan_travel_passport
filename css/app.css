@@ -692,9 +692,10 @@ a.app-btn {
     color: var(--c-text-muted);
 }
 
-/* 來源卡片的「詳細說明」：預設收起；撐開卡片剩餘高度，按鈕對齊在底部 */
-.app-source-more {
-    flex: 1;
+/* 來源卡片的「詳細說明」與教學連結：推到卡片底部、緊貼在按鈕上方，各卡片同一高度 */
+.app-source-more,
+.app-source-guide {
+    margin-top: auto;
     margin-bottom: 12px;
     font-size: calc(13px * var(--fs, 1));
     color: var(--c-text-muted);
@@ -717,6 +718,22 @@ a.app-btn {
 
 .app-source .app-btn {
     align-self: flex-start;
+}
+
+/* 卡片主按鈕貼齊底部；上面有詳細說明／教學連結時，由它們吃掉剩餘高度 */
+.app-source > .app-btn {
+    margin-top: auto;
+}
+
+.app-source > :is(.app-source-more, .app-source-guide) + .app-btn {
+    margin-top: 0;
+}
+
+/* 要寫成 p.app-source-guide：.app-source p 的 margin 權重比較高，會蓋掉上面的 margin-top: auto */
+.app-source p.app-source-guide {
+    margin-top: auto;
+    margin-bottom: 12px;
+    font-size: calc(13px * var(--fs, 1));
 }
 .app-dev {
     margin-top: 24px;
