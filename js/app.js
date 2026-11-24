@@ -55,7 +55,13 @@ const hasManual = () => !!manualSource()?.items.length;
 function ensureReady() {
     if (!app.ready) {
         app.fog = new FogClient(DATA);
-        app.fog.onprogress = p => { if (p.step === 'load') busy(`下載圖資中…（${p.done} / ${p.total}）`); };
+        app.fog.onprogress = p => {
+            if (p.step !== 'load') return;
+            const mb = b => (b / 1048576).toFixed(1);
+            busy('下載圖資中…', p.totalBytes
+                ? { ratio: Math.min(1, p.bytes / p.totalBytes), detail: `${mb(Math.min(p.bytes, p.totalBytes))} / ${mb(p.totalBytes)} MB` }
+                : { detail: `已下載 ${mb(p.bytes)} MB` });
+        };
         app.ready = Promise.all([
             app.fog.init(),
             fetch(DATA + 'version.json', { cache: 'no-cache' }).then(r => r.json()).then(v => { app.version = v; }),

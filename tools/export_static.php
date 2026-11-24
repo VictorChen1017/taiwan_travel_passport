@@ -452,13 +452,16 @@ if ($want('rail')) {
 $verFile = OUT . '/version.json';
 $prev = is_file($verFile) ? json_decode(file_get_contents($verFile), true) : [];
 $files = [];
+$sizes = [];   // 位元組數：前端下載時顯示「已下載 / 總大小」
 foreach (glob(OUT . '/*.json') as $f) {
     if (basename($f) === 'version.json') continue;
     $files[basename($f)] = substr(md5_file($f), 0, 8);
+    $sizes[basename($f)] = filesize($f);
 }
 $changed = ($prev['files'] ?? null) !== $files;
 write_json('version.json', [
     'version' => $changed ? date('YmdHis') : ($prev['version'] ?? date('YmdHis')),
     'files' => $files,
+    'sizes' => $sizes,
 ]);
 echo $changed ? "資料有變動，版本更新\n" : "資料沒有變動\n";

@@ -15,7 +15,7 @@ let ctx = null;   // 最近一次計算的內容（明細用）
 
 const handlers = {
     async init({ id, base }) {
-        const raw = await loadStatic(base, (done, total) => postMessage({ id, progress: { step: 'load', done, total } }));
+        const raw = await loadStatic(base, p => postMessage({ id, progress: { step: 'load', ...p } }));
         S = prepareStatic(raw);
         S.base = base;
         S.files = raw.files;
