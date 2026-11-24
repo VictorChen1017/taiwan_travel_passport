@@ -13,6 +13,7 @@ import * as manual from './manual.js';
 import { GROUP_COLOR } from './shared.js';
 import { createReport } from './report.js';
 import { TOUCH } from './device.js';
+import { openGuide, guideSeen } from './guide.js';
 
 const STEPS_KEY = 'fog-steps-done';    // 首頁三步驟：看過成就、匯出過卡片（localStorage，只是顯示用）
 const PATH_KEY = 'fog-include-path';   // 「包含移動路徑」記在 localStorage（只是顯示偏好）
@@ -682,7 +683,11 @@ function bindUi() {
     // 首頁三步驟：匯入 → 捲到資料來源；檢視成就；匯出卡片（先算好再開分享成就）
     $('steps').addEventListener('click', async e => {
         const step = e.target.closest('.app-step:not(:disabled)')?.dataset.step;
-        if (step === 'import') $('sourcesTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (step === 'import') {
+            $('sourcesTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // 第一次按「匯入資料」：跳出時間軸圖文教學（之後從時間軸卡片的「看圖文教學」再打開）
+            if (!guideSeen()) openGuide(() => $('timelineInput').click());
+        }
         else if (step === 'view') compute();
         else if (step === 'share') {
             if (!app.explore || !app.explore.data()) await compute({ show: false });
@@ -782,6 +787,7 @@ function bindUi() {
 
     // Google 時間軸：選檔（可多選）或拖曳檔案／資料夾
     $('timelineBtn').addEventListener('click', () => $('timelineInput').click());
+    $('guideBtn').addEventListener('click', () => openGuide(() => $('timelineInput').click()));
     $('timelineInput').addEventListener('change', e => {
         const files = [...(e.target.files || [])];
         e.target.value = '';
