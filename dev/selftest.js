@@ -5,7 +5,7 @@
 import { FogClient } from '../js/core/client.js';
 import * as manual from '../js/manual.js';
 import { exportBackup, parseBackup } from '../js/backup.js';
-import { renderReport, PRESETS, BLOCKS, subsOf } from '../js/report.js';
+import { renderReport, PRESETS, BLOCKS, subsOf, DEFAULT_SUB_OFF } from '../js/report.js';
 
 // 基準值：原專案照片（test/legacy/photos.json）在 2026-11-21 圖資下的結果
 const BASE = {
@@ -158,7 +158,7 @@ async function run() {
     });
 
     // ---------- 成就報表 ----------
-    await check('報表', '六種預設組合都能產生圖片（淺色、深色）', async () => {
+    await check('報表', '每種預設組合都能產生圖片（淺色、深色）', async () => {
         const maps = {};
         for (const lv of ['county', 'town', 'village']) maps[lv] = await fetch(DATA + `map_${lv}.json`).then(r => r.json());
         const stats = await fog.compute(records(photos), 'photo');
@@ -167,7 +167,7 @@ async function run() {
         for (const theme of ['light', 'dark']) {
             window.photoTheme && window.photoTheme.set(theme);
             for (const p of PRESETS) {
-                const r = renderReport({ blocks: new Set(p.blocks), missing, hideDates: theme === 'dark', nickname: '測試', mapLevel: 'town' },
+                const r = renderReport({ blocks: new Set(p.blocks), missing, subOff: DEFAULT_SUB_OFF, hideDates: theme === 'dark', nickname: '測試', mapLevel: 'town' },
                                        { stats, meta: { from: null, to: null, mode: 'photo', manual: 0 }, maps });
                 if (!(r.height > 300) || r.tooTall) throw new Error(`${p.label}（${theme}）高度 ${r.height}`);
                 if (theme === 'light') out.push(`${p.label} ${r.height}`);
@@ -175,6 +175,15 @@ async function run() {
         }
         window.photoTheme && window.photoTheme.set('light');
         return res(true, out.join('、') + ' px');
+    });
+    await check('報表', '子項目預設值的代號都存在（打錯字會悄悄失效）', async () => {
+        const stats = await fog.compute(records(photos), 'photo');
+        const bad = [];
+        for (const [block, keys] of Object.entries(DEFAULT_SUB_OFF)) {
+            const have = new Set(subsOf(block, stats).map(x => x.key));
+            for (const k of keys) if (!have.has(k)) bad.push(`${block}:${k}`);
+        }
+        return res(!bad.length, bad.length ? '找不到 ' + bad.join('、') : Object.entries(DEFAULT_SUB_OFF).map(([b, k]) => `${b} 關 ${k.length}`).join('、'));
     });
     await check('報表', '產生的畫布能輸出 PNG', async () => {
         const stats = await fog.compute(records(photos), 'photo');

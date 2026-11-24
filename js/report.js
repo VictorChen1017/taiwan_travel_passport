@@ -43,14 +43,28 @@ export const BLOCKS = [
     { id: 'nature', label: '國家公園與保護區', missing: true },
     { id: 'travel', label: '旅行成就', missing: true },
 ];
+// 預設組合只決定勾哪些區塊；子項目用下面的 DEFAULT_SUB_OFF，切換組合時保留使用者自己改過的
 export const PRESETS = [
-    { id: 'overview', label: '足跡總覽', blocks: ['summary', 'map', 'yearly', 'conquer'] },
-    { id: 'conquer', label: '制霸卡', blocks: ['conquer', 'villages', 'milestone'] },
-    { id: 'peak', label: '登山', blocks: ['summary', 'peak'] },
-    { id: 'rail', label: '鐵道', blocks: ['rail', 'metro', 'lrt'] },
-    { id: 'traveler', label: '旅人', blocks: ['pole', 'island', 'landmark', 'bspot', 'nature', 'travel'] },
-    { id: 'full', label: '完整', blocks: BLOCKS.map(b => b.id) },
+    { id: 'overview', label: '足跡總覽', blocks: ['summary', 'map', 'yearly'] },
+    { id: 'conquer', label: '制霸卡', blocks: ['summary', 'map', 'conquer'] },
+    { id: 'villages', label: '村里探索', blocks: ['summary', 'villages'] },
+    { id: 'peak', label: '登山', blocks: ['peak'] },
+    { id: 'pole', label: '極點', blocks: ['pole'] },
+    { id: 'metro', label: '捷運', blocks: ['metro', 'lrt'] },
+    { id: 'rail', label: '台鐵', blocks: ['rail'] },
+    { id: 'island', label: '離島', blocks: ['island'] },
+    { id: 'bspot', label: 'B級景點', blocks: ['bspot'] },
+    { id: 'nature', label: '國家公園', blocks: ['nature'] },
 ];
+// 子項目預設關掉的（{ 區塊 id: [子項目 key] }，key 見 subsOf）：捷運只留北捷、新北捷；輕軌只留淡海、安坑；
+// 鐵路只留高鐵、臺鐵北部、支線；國家公園與保護區不含野生動物重要棲息環境；登山百岳、小百岳都開
+export const DEFAULT_SUB_OFF = {
+    metro: ['rail_tymc', 'rail_tmrt', 'rail_krtc', 'rail_maokong'],
+    lrt: ['rail_lrt_kaohsiung'],
+    rail: ['tra_c', 'tra_s', 'tra_e', 'afr'],
+    nature: ['野生動物重要棲息環境'],
+};
+const defaultSubOff = () => JSON.parse(JSON.stringify(DEFAULT_SUB_OFF));
 const UNIT_LABEL = { county: '縣市', town: '鄉鎮', village: '村里' };
 // 村里探索進度的縣市選單順序：六都（由北到南）、其他縣市（西部由北到南，再東部由北到南）、離島
 const COUNTY_ORDER = [
@@ -690,13 +704,14 @@ export function renderReport(o, env) {
 // =====================================================================
 
 const PREF_KEY = 'fog-report';   // 選項記在 localStorage（暱稱除外的顯示偏好；暱稱也存，只在這台）
+const PREF_VER = 2;              // 2：子項目改用 DEFAULT_SUB_OFF（舊版存的子項目不沿用，改回新預設一次）
 
 function loadPref() {
     try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch (e) { return {}; }
 }
 function savePref(o) {
     try {
-        localStorage.setItem(PREF_KEY, JSON.stringify({ preset: o.preset, blocks: [...o.blocks], hideMissing: [...o.hideMissing], subOff: o.subOff, cumul: o.cumul, vCounty: o.vCounty,
+        localStorage.setItem(PREF_KEY, JSON.stringify({ v: PREF_VER, preset: o.preset, blocks: [...o.blocks], hideMissing: [...o.hideMissing], subOff: o.subOff, cumul: o.cumul, vCounty: o.vCounty,
             hideDates: o.hideDates, hideRegular: o.hideRegular, nickname: o.nickname, mapLevel: o.mapLevel, mapColor: o.mapColor }));
     } catch (e) { /* 存不了只影響下次 */ }
 }
@@ -706,11 +721,14 @@ const presetBlocks = id => new Set((PRESETS.find(p => p.id === id) || PRESETS[0]
 export function createReport({ getStats, loadMap, getMeta }) {
     let modal = null, timer = null, last = null, lastMs = 0;
     const p = loadPref();
+    const known = id => id === 'custom' || PRESETS.some(x => x.id === id);
     const o = {
-        preset: p.preset || 'overview',
+        // 舊版的組合（旅人、完整）已拿掉：保留當時勾的區塊，選單顯示「自訂」
+        preset: p.preset ? (known(p.preset) ? p.preset : 'custom') : 'overview',
         blocks: p.blocks ? new Set(p.blocks) : presetBlocks('overview'),
         hideMissing: new Set(p.hideMissing || []),   // 隱藏未達成的區塊（預設都顯示；舊版的 missing 不沿用）
-        subOff: p.subOff && typeof p.subOff === 'object' ? p.subOff : {},   // 進階選項關掉的子項目
+        // 進階選項關掉的子項目
+        subOff: p.v === PREF_VER && p.subOff && typeof p.subOff === 'object' ? p.subOff : defaultSubOff(),
         cumul: p.cumul ?? true,          // 每年新解鎖：累積曲線
         vCounty: p.vCounty || '',        // 村里探索進度：只看這個縣市的各鄉鎮（空＝各縣市）
         hideDates: !!p.hideDates,
