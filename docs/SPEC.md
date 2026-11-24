@@ -377,7 +377,8 @@ photo_fog_static/
 |---|---|
 | 網站檔案 | `index.html`、`css/`、`js/`、`data/` 全是靜態檔，路徑都是相對路徑（放在 `https://<帳號>.github.io/<repo>/` 子路徑可用） |
 | PHP | 只有 `tools/` 的維護工具（在維護者電腦執行），網站不會呼叫；放上 Pages 只會被當成文字檔，內容不含帳密 |
-| 外部資源 | Leaflet 1.9.4（unpkg）、exifr 7.1.3（jsDelivr）、OpenStreetMap 圖磚，皆為 HTTPS、固定版本 |
+| 外部資源 | 只有 OpenStreetMap 圖磚（HTTPS）。Leaflet 1.9.4、exifr 7.1.3 放在 `vendor/`（雜湊值已對過官方 SRI／npm 套件），不從 CDN 載入 |
+| CSP | `index.html`、`help.html` 用 `<meta>` 設定：script／connect／worker 只允許 self，img 另允許 data: 與 tile.openstreetmap.org；style 允許 unsafe-inline（innerHTML 裡有 style 屬性）。換圖磚供應商要同步改 CSP |
 | HTTPS | Pages 一律 HTTPS，`showDirectoryPicker`、module Worker 都需要安全環境 |
 | Jekyll | 加了 `.nojekyll`，讓 Pages 直接提供檔案、不經 Jekyll 處理 |
 | 檔案大小 | 最大 `villages.topo.json` 4.6 MB，遠低於 Pages 單檔 100 MB 上限；Pages 會自動 gzip |

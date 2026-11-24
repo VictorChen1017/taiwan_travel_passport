@@ -403,7 +403,7 @@ a.app-btn {
     color: var(--c-text-muted);
 }
 
-/* 三步驟卡片：is-done 打勾、is-current 強調、is-locked 變淡（還沒匯入時的 2、3） */
+/* 三步驟卡片：一開始白底；做過（is-done）＝號碼變 ✓、底色填滿強調色淡底；還沒匯入時 2、3 變淡 */
 .app-steps {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -472,25 +472,25 @@ a.app-btn {
     color: var(--c-text-muted);
 }
 
-.app-step.is-current {
+.app-step.is-done {
+    background: var(--c-accent-soft);
     border-color: var(--c-accent);
-    box-shadow: 0 0 0 3px var(--c-accent-soft);
 }
 
-.app-step.is-current .app-step-n {
+.app-step.is-done .app-step-n {
+    font-size: 0;
     color: var(--c-on-accent);
     background: var(--c-accent);
     border-color: var(--c-accent);
 }
 
-.app-step.is-done .app-step-n {
-    color: var(--c-on-accent);
-    background: var(--c-success);
-    border-color: var(--c-success);
+.app-step.is-done .app-step-n::after {
+    content: "✓";
+    font-size: calc(13px * var(--fs, 1));
 }
 
 .app-step.is-done .app-step-desc {
-    color: var(--c-success-strong);
+    color: var(--c-accent-strong);
 }
 
 .app-step:disabled {

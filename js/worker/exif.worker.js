@@ -5,9 +5,9 @@
 //   status：0 有座標、1 沒有 GPS、2 讀取失敗
 //   time：「當地時鐘時間當成 UTC」的 unix 秒（DateTimeOriginal 本身就是當地時間，直接當 UTC 解讀）；沒有則 NaN
 //
-// 套件：exifr 7.1.3 完整版（HEIC、JPEG、TIFF 系 RAW、PNG）
+// 套件：exifr 7.1.3 完整版（HEIC、JPEG、TIFF 系 RAW、PNG），放在 vendor/，不從 CDN 載入
 
-import exifr from 'https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.esm.mjs';
+import exifr from '../../vendor/exifr-7.1.3/full.esm.mjs';
 
 const CONCURRENCY = 8;
 const OPTIONS = {

@@ -904,7 +904,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
         const filename = `台灣旅遊護照成就報表-${todayStr()}.png`;
         const file = new File([blob], filename, { type: 'image/png' });
         if (canShareFile(file)) {
-            try { await navigator.share({ files: [file], title: filename }); return; }
+            try { await navigator.share({ files: [file], title: filename }); document.dispatchEvent(new Event('reportsaved')); return; }
             catch (e) { if (e.name === 'AbortError') return; }
         }
         const url = URL.createObjectURL(blob);
@@ -912,6 +912,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
         a.href = url; a.download = filename;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
+        document.dispatchEvent(new Event('reportsaved'));   // 首頁「匯出卡片」打勾
     }
 
     function open() {

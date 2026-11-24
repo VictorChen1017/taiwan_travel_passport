@@ -2,12 +2,14 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
+<!-- 內容安全政策：只允許本站的程式與資料、OSM 圖磚；不能連到其他網站（照片與位置無處可送） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>使用說明・台灣旅遊護照</title>
 <meta name="description" content="台灣旅遊護照的使用說明：如何匯入照片與 Google 時間軸、成就怎麼計算、隱私與對外連線、圖資授權。">
 
 <link rel="stylesheet" href="css/theme.css?v=20261120">
-<link rel="stylesheet" href="css/app.css?v=20261121n">
+<link rel="stylesheet" href="css/app.css?v=20261124a">
 <link rel="stylesheet" href="css/help.css?v=20261121b">
 <script src="js/theme.js?v=20261120"></script>
 </head>
@@ -173,13 +175,11 @@
         <table class="hp-table">
             <thead><tr><th>對象</th><th>什麼時候</th><th>送出什麼</th></tr></thead>
             <tbody>
-                <tr><td>本網站（GitHub Pages）</td><td>打開網站、第一次計算時下載圖資</td><td>一般網頁請求；GitHub 會像所有網站一樣看到你的 IP</td></tr>
-                <tr><td>unpkg.com（Leaflet 1.9.4）</td><td>打開網站</td><td>下載地圖套件</td></tr>
-                <tr><td>cdn.jsdelivr.net（exifr 7.1.3）</td><td>讀取照片資料夾時</td><td>下載 EXIF 讀取套件（照片本身不會送出）</td></tr>
+                <tr><td>本網站（GitHub Pages）</td><td>打開網站、第一次計算時下載圖資與套件（Leaflet、exifr 都放在本站，不經過其他 CDN）</td><td>一般網頁請求；GitHub 會像所有網站一樣看到你的 IP</td></tr>
                 <tr><td>OpenStreetMap 圖磚</td><td>打開成就明細的小地圖時</td><td>下載地圖圖片；圖磚伺服器會知道你看的地圖範圍與你的 IP</td></tr>
             </tbody>
         </table>
-        <p class="hp-note">套件都固定版本。除了上面這些，網站不會連到其他地方。</p>
+        <p class="hp-note">除了上面這些，網站不會連到其他地方（由內容安全政策 CSP 強制限制）。<br>原始碼與自架方法：<a href="https://github.com/VictorChen1017/taiwan_travel_passport#自己架架看" target="_blank" rel="noopener">GitHub</a></p>
 
         <h2 id="data">8. 圖資與授權</h2>
         <ul>

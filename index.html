@@ -2,21 +2,23 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
+<!-- 內容安全政策：只允許本站的程式與資料、OSM 圖磚；不能連到其他網站（照片與位置無處可送） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>台灣旅遊護照</title>
 <meta name="description" content="匯入照片或 Google 時間軸，看看你走過台灣的哪些地方、解鎖哪些成就。所有計算都在你的瀏覽器裡完成。">
 
-<!-- Leaflet（成就明細的小地圖；固定版本） -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<!-- Leaflet（成就明細的小地圖）：放在 vendor/，不從 CDN 載入 -->
+<link rel="stylesheet" href="vendor/leaflet-1.9.4/leaflet.css">
+<script src="vendor/leaflet-1.9.4/leaflet.js"></script>
 
 <link rel="stylesheet" href="css/theme.css?v=20261120">
 <link rel="stylesheet" href="css/explore.css?v=20261121g">
-<link rel="stylesheet" href="css/app.css?v=20261121n">
+<link rel="stylesheet" href="css/app.css?v=20261124a">
 <link rel="stylesheet" href="css/report.css?v=20261121j">
 <!-- 主題在畫面出現前套用，避免先閃白 -->
 <script src="js/theme.js?v=20261120"></script>
-<script type="module" src="js/app.js?v=20261121x"></script>
+<script type="module" src="js/app.js?v=20261124b"></script>
 </head>
 <body>
 
@@ -65,24 +67,6 @@
                     <span class="app-sample-cap">範例：小明的足跡</span>
                 </a>
             </div>
-            <!-- 已匯入的資料（有資料時才出現）：勾選後刪除 -->
-            <div class="app-imported" id="imported" hidden>
-                <div class="app-imported-head">
-                    <h2 class="app-sub">已匯入的資料</h2>
-                    <button type="button" class="app-btn primary" id="viewBtn">🏅 查看成就</button>
-                </div>
-                <div class="app-source-table">
-                    <div class="app-source-bar">
-                        <label class="app-check"><input type="checkbox" id="selectAll"> 全選</label>
-                        <span class="app-source-count" id="sourceCount"></span>
-                        <button type="button" class="app-btn" id="exportBtn" title="把匯入的資料存成 .json 檔，可在其他電腦或手機上匯入">⬇ 匯出備份</button>
-                        <button type="button" class="app-btn danger" id="deleteBtn" disabled>🗑 刪除所選</button>
-                    </div>
-                    <ul class="app-source-list" id="sourceList"></ul>
-                </div>
-                <p class="app-note">資料存在這個瀏覽器的本機儲存空間（IndexedDB），不會上傳；刪除只會移除這裡的匯入結果，不會動到你的照片，刪除後需要重新匯入。</p>
-            </div>
-
             <h2 class="app-sub" id="sourcesTitle">選擇資料來源</h2>
             <!-- 本機運算說明：放在選資料來源的地方（這裡才會關心隱私）；預設收起，只留第一行 -->
             <details class="app-privacy-box" id="privacyBox">
@@ -175,6 +159,24 @@
                     <button type="button" class="app-btn primary" id="backupBtn">選擇備份檔</button>
                     <input type="file" id="backupInput" accept=".json,application/json" hidden>
                 </div>
+            </div>
+
+            <!-- 已匯入的資料（有資料時才出現）：勾選後刪除；放在選資料來源下面（加入比管理常用） -->
+            <div class="app-imported" id="imported" hidden>
+                <div class="app-imported-head">
+                    <h2 class="app-sub">已匯入的資料</h2>
+                    <button type="button" class="app-btn primary" id="viewBtn">🏅 查看成就</button>
+                </div>
+                <div class="app-source-table">
+                    <div class="app-source-bar">
+                        <label class="app-check"><input type="checkbox" id="selectAll"> 全選</label>
+                        <span class="app-source-count" id="sourceCount"></span>
+                        <button type="button" class="app-btn" id="exportBtn" title="把匯入的資料存成 .json 檔，可在其他電腦或手機上匯入">⬇ 匯出備份</button>
+                        <button type="button" class="app-btn danger" id="deleteBtn" disabled>🗑 刪除所選</button>
+                    </div>
+                    <ul class="app-source-list" id="sourceList"></ul>
+                </div>
+                <p class="app-note">資料存在這個瀏覽器的本機儲存空間（IndexedDB），不會上傳；刪除只會移除這裡的匯入結果，不會動到你的照片，刪除後需要重新匯入。<br>原始碼與自架方法：<a href="https://github.com/VictorChen1017/taiwan_travel_passport#自己架架看" target="_blank" rel="noopener">GitHub</a></p>
             </div>
             <p class="app-dev" id="devBox" hidden>
                 開發用：<button type="button" class="app-btn" id="devLegacy">載入原專案測試資料（test/legacy）</button>

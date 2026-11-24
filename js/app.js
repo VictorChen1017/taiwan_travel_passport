@@ -14,6 +14,7 @@ import { GROUP_COLOR } from './shared.js';
 import { createReport } from './report.js';
 import { TOUCH } from './device.js';
 
+const STEPS_KEY = 'fog-steps-done';    // 首頁三步驟：看過成就、匯出過卡片（localStorage，只是顯示用）
 const PATH_KEY = 'fog-include-path';   // 「包含移動路徑」記在 localStorage（只是顯示偏好）
 const readPathPref = () => { try { return localStorage.getItem(PATH_KEY) === '1'; } catch (e) { return false; } };
 
@@ -355,7 +356,7 @@ function sourceSummary(s) {
         };
     }
     if (s.type === 'gtimeline') {
-        const fmts = Object.keys(s.formats || {}).map(gtl.formatLabel).join('、');
+        const fmts = Object.keys(s.formats || {}).map(f => esc(gtl.formatLabel(f))).join('、');
         return {
             main: `<b>${n0(st.visits)}</b> 個停留點`,
             detail: [`期間：${range}`, `移動路徑 ${n0(st.path)} 點`, `在台灣範圍內 ${n0(st.taiwan)} 筆`,
@@ -390,21 +391,34 @@ function renderSources() {
     updateSelection();
 }
 
-/** 首頁三步驟：還沒匯入時只有 1 可按；匯入後 1 打勾、2 是下一步、3 可直接開分享成就 */
+/** 首頁三步驟：還沒匯入時只有 1 可按；做過的步驟打勾、底色填滿（1 有資料、2 打開過成就、3 匯出或分享過卡片） */
 function renderSteps() {
     const n = app.sources.length;
+    let done = {};
+    try { done = n ? JSON.parse(localStorage.getItem(STEPS_KEY) || '{}') : (localStorage.removeItem(STEPS_KEY), {}); } catch (e) { /* 讀不到就當沒做過 */ }
     const set = (step, cls, disabled, desc) => {
         const b = $('steps').querySelector(`[data-step="${step}"]`);
-        b.classList.remove('is-done', 'is-current');
+        b.classList.remove('is-done');
         if (cls) b.classList.add(cls);
         b.disabled = disabled;
         const d = b.querySelector('.app-step-desc');
         d.dataset.base ??= d.textContent;
         d.textContent = desc || d.dataset.base;
     };
-    set('import', n ? 'is-done' : 'is-current', false, n ? `✓ 已匯入 ${n} 個來源，可以再加入` : '');
-    set('view', n ? 'is-current' : '', !n, n ? '' : '匯入資料後解鎖');
-    set('share', '', !n, n ? '' : '匯入資料後解鎖');
+    set('import', n ? 'is-done' : '', false, n ? `已匯入 ${n} 個來源，可以再加入` : '');
+    set('view', done.view ? 'is-done' : '', !n, n ? '' : '匯入資料後解鎖');
+    set('share', done.share ? 'is-done' : '', !n, n ? '' : '匯入資料後解鎖');
+}
+
+/** 記下某一步做過了（view：打開成就頁；share：成功匯出或分享卡片） */
+function markStep(step) {
+    try {
+        const done = JSON.parse(localStorage.getItem(STEPS_KEY) || '{}');
+        if (done[step]) return;
+        done[step] = 1;
+        localStorage.setItem(STEPS_KEY, JSON.stringify(done));
+    } catch (e) { /* 存不了只影響打勾 */ }
+    renderSteps();
 }
 
 /** 依勾選狀態更新：全選框、所選筆數、刪除按鈕、列的底色 */
@@ -521,6 +535,7 @@ function showExplore() {
     const fromLanding = !$('landing').hidden;
     $('landing').hidden = true;
     $('explore').hidden = false;
+    markStep('view');
     $('importBtn').hidden = false;
     $('reportBtn').hidden = false;
     if (fromLanding) window.scrollTo(0, 0);
@@ -654,13 +669,14 @@ function bindUi() {
     });
 
     $('importBtn').addEventListener('click', showLanding);
+    document.addEventListener('reportsaved', () => markStep('share'));
     $('reportBtn').addEventListener('click', openReport);
     $('viewBtn').addEventListener('click', () => compute());
 
-    // 首頁三步驟：匯入 → 捲到資料來源（已匯入時捲到已匯入的資料）；檢視成就；匯出卡片（先算好再開分享成就）
+    // 首頁三步驟：匯入 → 捲到資料來源；檢視成就；匯出卡片（先算好再開分享成就）
     $('steps').addEventListener('click', async e => {
         const step = e.target.closest('.app-step:not(:disabled)')?.dataset.step;
-        if (step === 'import') $(app.sources.length ? 'imported' : 'sourcesTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (step === 'import') $('sourcesTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
         else if (step === 'view') compute();
         else if (step === 'share') {
             if (!app.explore || !app.explore.data()) await compute({ show: false });
