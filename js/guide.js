@@ -5,29 +5,33 @@
 
 export const GUIDE_KEY = 'fog-guide-timeline-seen';
 
-const n = k => `<span class="gd-n">${k}</span>`;   // 文字裡的編號，對應截圖上的橘色圓點（整份教學連續 1–8）
+const n = k => `<span class="gd-n">${k}</span>`;   // 文字裡的編號，對應截圖上的橘色圓點（整份教學連續 1–9）
 
 // 目前只有 iPhone 截圖，Android 也先看這份（步驟大致相同）；有 Android 截圖後再分兩套
-// img：[檔名, 寬, 高]（寬高先寫好，避免圖載入時版面跳動）；圖上的編號在 tools/make_guide_images.py
+// img：img/guide/ 的檔名；8 張同尺寸（720×1472，見 tools/make_guide_images.py），圖上的編號也在那裡
 const PAGES = [
-    { img: ['tl-ios-1', 720, 683], title: '打開 Google 地圖 App',
-      text: `點右上角的<b>大頭貼</b>，選 ${n(1)}「<b>你的時間軸</b>」。` },
-    { img: ['tl-ios-2', 720, 1427], title: '進入設定',
-      text: `點右上角的 ${n(2)}「<b>⋯</b>」，再點 ${n(3)}「<b>位置和隱私權設定</b>」。` },
-    { img: ['tl-ios-3', 720, 1410], title: '匯出時間軸資料',
-      text: `往下找到 ${n(4)}「<b>匯出時間軸資料</b>」，點進去。` },
-    { img: ['tl-ios-4', 720, 241], title: '儲存到檔案',
-      text: `跳出分享選單後，點 ${n(5)}「<b>儲存到檔案</b>」。` },
-    { img: ['tl-ios-5', 720, 1472], title: '選資料夾，按儲存',
-      text: `${n(6)} 選一個你找得到的資料夾（點資料夾名稱可以換，例如「我的 iPhone」），再按 ${n(7)}「<b>儲存</b>」。檔名不用改。` },
-    { img: ['tl-ios-6', 720, 542], title: '回到這裡選檔案', pick: true,
-      text: `按下面的「<b>選擇檔案</b>」→「<b>選擇檔案</b>」，到剛剛存的資料夾，點 ${n(8)} <b>Timeline.json</b>。` },
+    { img: 'tl-ios-1', title: '打開 Google 地圖 App',
+      text: `點右上角的 ${n(1)} <b>大頭貼</b>。` },
+    { img: 'tl-ios-2', title: '你的時間軸',
+      text: `點 ${n(2)}「<b>你的時間軸</b>」。` },
+    { img: 'tl-ios-3', title: '打開選單',
+      text: `點右上角的 ${n(3)}「<b>⋯</b>」。` },
+    { img: 'tl-ios-4', title: '位置和隱私權設定',
+      text: `點 ${n(4)}「<b>位置和隱私權設定</b>」。` },
+    { img: 'tl-ios-5', title: '匯出時間軸資料',
+      text: `往下找到 ${n(5)}「<b>匯出時間軸資料</b>」，點進去。` },
+    { img: 'tl-ios-6', title: '儲存到檔案',
+      text: `跳出分享選單後，點 ${n(6)}「<b>儲存到檔案</b>」。` },
+    { img: 'tl-ios-7', title: '選資料夾，按儲存',
+      text: `${n(7)} 選一個你找得到的資料夾（點資料夾名稱可以換，例如「我的 iPhone」），再按 ${n(8)}「<b>儲存</b>」。檔名不用改。` },
+    { img: 'tl-ios-8', title: '回到這裡選檔案', pick: true,
+      text: `按下面的「<b>選擇檔案</b>」，到剛剛存的資料夾，點 ${n(9)} <b>Timeline.json</b>。` },
 ];
 
 let dlg = null, onPick = null;
 
 function pageHtml(p, i, total) {
-    const media = `<img class="gd-img${p.img[2] / p.img[1] < 0.5 ? ' wide' : ''}" src="img/guide/${p.img[0]}.webp?v=20261125b" width="${p.img[1]}" height="${p.img[2]}" alt="" loading="lazy" decoding="async">`;
+    const media = `<img class="gd-img" src="img/guide/${p.img}.webp?v=20261125c" width="720" height="1472" alt="" loading="lazy" decoding="async">`;
     return `<section class="gd-page" aria-roledescription="slide" aria-label="${i + 1} / ${total}">
         <div class="gd-media">${media}</div>
         <div class="gd-body">
@@ -35,7 +39,7 @@ function pageHtml(p, i, total) {
             <h3>${p.title}</h3>
             <p>${p.text}</p>
             ${p.pick ? `<button type="button" class="app-btn primary gd-pick">選擇檔案</button>
-                <p class="gd-note">在電腦上用：先把手機存的檔案傳到電腦（AirDrop、雲端硬碟、傳訊息給自己都可以），再選檔或拖曳到「Google 時間軸」卡片。</p>` : ''}
+                <p class="gd-note">在電腦上用：先把檔案從手機傳到電腦（AirDrop、雲端硬碟都可以）再選檔。</p>` : ''}
         </div>
     </section>`;
 }

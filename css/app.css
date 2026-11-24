@@ -1151,14 +1151,11 @@ a.app-btn {
     width: auto;
     max-width: 100%;
     height: auto;
-    max-height: min(44dvh, 400px);
+    max-height: min(48dvh, 440px);
+    aspect-ratio: 720 / 1472;   /* 8 張同尺寸：圖還沒載入就先占好位置，翻頁不跳動 */
     border: 1px solid var(--c-border);
     border-radius: 10px;
     background: var(--c-surface-2);
-}
-
-.gd-img.wide {
-    width: 100%;
 }
 
 
