@@ -83,6 +83,11 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
 
     function render() {
         root.innerHTML = `
+            <div class="ex-start" id="ex-start" hidden>
+                <div class="ex-start-text"><b>👋 還沒有任何足跡</b>
+                    沒有照片或時間軸也沒關係：點下方的成就徽章或集點卡，按「<b>我有去過，手動加入！</b>」或「<b>＋ 我去過</b>」，就能記下去過的地方。</div>
+                <button type="button" class="ex-start-btn" id="ex-start-go">看全部成就 ↓</button>
+            </div>
             <div class="ex-head" id="ex-overview">
                 <h3 class="ex-title">🌫️ 迷霧探索</h3>
                 <div class="ex-seg" data-group="unit">
@@ -148,6 +153,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 update();
             });
         });
+        root.querySelector('#ex-start-go').addEventListener('click', showBadgeOverview);
         let rt = null;
         window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => state.data && renderYearly(), 150); });
         bindInlineMap();
@@ -155,6 +161,9 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
     }
 
     function update() {
+        // 什麼都還沒解鎖（沒有匯入、也沒有手動紀錄）：頂端提示可以手動加入
+        const d = state.data;
+        root.querySelector('#ex-start').hidden = d.summary.village.unlocked > 0 || d.achievements.some(a => a.done);
         root.querySelectorAll('.ex-seg').forEach(seg => {
             seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === state[seg.dataset.group]));
         });

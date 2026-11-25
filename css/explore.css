@@ -32,6 +32,51 @@
 
 /* ---------- 標題列與分段按鈕 ---------- */
 
+/* 沒有任何足跡時的頂端提示：可以手動加入 */
+.ex-start {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    margin-bottom: 14px;
+    padding: 10px 16px;
+    background: var(--c-accent-soft);
+    border: 1px solid var(--c-accent);
+    border-left-width: 5px;
+    border-radius: 10px;
+    font-size: calc(14px * var(--fs, 1));
+    line-height: 1.6;
+}
+
+.ex-start[hidden] {
+    display: none;
+}
+
+.ex-start-text {
+    flex: 1 1 280px;
+}
+
+.ex-start-text > b:first-child {
+    display: block;
+}
+
+.ex-start-btn {
+    flex: none;
+    padding: 6px 14px;
+    border: 1px solid var(--c-accent);
+    border-radius: 999px;
+    background: var(--c-surface);
+    color: var(--c-accent-strong);
+    font: inherit;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.ex-start-btn:hover {
+    background: var(--c-accent);
+    color: var(--c-on-accent);
+}
+
 .ex-head {
     display: flex;
     flex-wrap: wrap;

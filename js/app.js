@@ -128,8 +128,8 @@ function defaultMode() {
     return hasTimeline() || hasManual() ? 'visit' : 'photo';
 }
 
+/** 計算並顯示成就。沒有任何來源也照常計算（全部未解鎖），讓沒有資料的人也能看成就、手動加入 */
 async function compute({ show = true } = {}) {
-    if (!app.sources.length) { showLanding(); return; }
     app.mode = defaultMode();
     busy('準備中…');
     try {
@@ -216,7 +216,7 @@ async function removeManual(ref) {
     if (src.items.length) await saveSource(src);
     else { await removeSource(src.id); app.sources = app.sources.filter(s => s !== src); }
     renderSources();
-    if (app.sources.length) await compute({ show: false }); else { hideToc(); showLanding(); }
+    await compute({ show: false });   // 刪到沒有紀錄也留在成就頁（全部未解鎖）
 }
 
 /** 毫秒時間 → 本機日期時間（給使用者看的匯入時間） */
@@ -398,11 +398,11 @@ function renderSources() {
     updateSelection();
 }
 
-/** 首頁三步驟：還沒匯入時只有 1 可按；做過的步驟打勾、底色填滿（1 有資料、2 打開過成就、3 匯出或分享過卡片） */
+/** 首頁三步驟：三步都可以按（沒有資料也能看成就、手動加入）；做過的步驟打勾、底色填滿（1 有資料、2 打開過成就、3 匯出或分享過卡片） */
 function renderSteps() {
     const n = app.sources.length;
     let done = {};
-    try { done = n ? JSON.parse(localStorage.getItem(STEPS_KEY) || '{}') : (localStorage.removeItem(STEPS_KEY), {}); } catch (e) { /* 讀不到就當沒做過 */ }
+    try { done = JSON.parse(localStorage.getItem(STEPS_KEY) || '{}'); } catch (e) { /* 讀不到就當沒做過 */ }
     const set = (step, cls, disabled, desc) => {
         const b = $('steps').querySelector(`[data-step="${step}"]`);
         b.classList.remove('is-done');
@@ -413,8 +413,8 @@ function renderSteps() {
         d.textContent = desc || d.dataset.base;
     };
     set('import', n ? 'is-done' : '', false, n ? `已匯入 ${n} 個來源，可以再加入` : '');
-    set('view', done.view ? 'is-done' : '', !n, n ? '' : '匯入資料後解鎖');
-    set('share', done.share ? 'is-done' : '', !n, n ? '' : '匯入資料後解鎖');
+    set('view', done.view ? 'is-done' : '', false, '');
+    set('share', done.share ? 'is-done' : '', false, '');
 }
 
 /** 記下某一步做過了（view：打開成就頁；share：成功匯出或分享卡片） */
@@ -559,7 +559,8 @@ function reportMeta() {
     return { from: from.length ? Math.min(...from) : null, to: to.length ? Math.max(...to) : null, mode: app.mode, manual: m ? m.items.length : 0 };
 }
 
-function openReport() {
+async function openReport() {
+    if (!app.explore || !app.explore.data()) await compute({ show: false });
     if (!app.explore || !app.explore.data()) return;
     if (!app.report) app.report = createReport({ getStats: () => app.explore.data(), loadMap, getMeta: reportMeta });
     app.report.open();
@@ -573,23 +574,22 @@ function renderModeSeg() {
 }
 
 /**
- * 側邊欄（成就目錄）：匯入前後都顯示。
- * 沒有資料時（還沒匯入、全部刪除）顯示骨架：入口按鈕照常，總覽與成就各類灰色、進度為「—」
+ * 側邊欄（成就目錄）：一直顯示、都可以點（沒有資料也能看成就）。
+ * 還沒計算過（沒有匯入、剛打開網站）時進度顯示「—」，點了才下載圖資計算
  */
 function renderToc() {
     const toc = $('toc');
-    const ready = !!(app.explore && app.explore.data() && app.sources.length);
+    const ready = !!(app.explore && app.explore.data());
     const groups = ready ? app.explore.groups() : Object.keys(GROUP_LABEL).map(g => ({ g, label: GROUP_LABEL[g] }));
-    const item = (href, label, attrs = '') => ready ? `<li><a href="${href}"${attrs}>${label}</a></li>` : `<li><span class="toc-off">${label}</span></li>`;
+    const item = (href, label, attrs = '') => `<li><a href="${href}"${attrs}>${label}</a></li>`;
     toc.innerHTML = `
-        ${ready ? '<button type="button" class="app-btn primary toc-import" data-act="view">🏅 查看成就</button>' : ''}
+        <button type="button" class="app-btn primary toc-import" data-act="view">🏅 查看成就</button>
         <button type="button" class="app-btn toc-import" data-act="import">📂 匯入資料</button>
-        ${ready ? '<button type="button" class="app-btn toc-report" data-act="report">📤 分享成就</button>' : ''}
+        <button type="button" class="app-btn toc-report" data-act="report">📤 分享成就</button>
         <a class="app-btn toc-report toc-help" href="help.html" target="_blank" rel="noopener">❓ 使用說明</a>
         ${ready && hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path">
             <input type="checkbox" id="pathToggle"${app.includePath ? ' checked' : ''}> 包含移動路徑
             <button type="button" class="qtip" data-tip="打開後，移動時途經的點也算造訪過。探索率會變高，但可能會失真。" aria-label="說明：包含移動路徑">?</button></label>` : ''}
-        ${ready ? '' : '<p class="toc-empty">🔒 匯入資料後解鎖以下內容</p>'}
         <h2>總覽</h2>
         <ul>
             ${item('#ex-overview', '探索率', ' data-go="overview"')}
@@ -600,16 +600,15 @@ function renderToc() {
         <h2>成就</h2>
         <ul>
             ${item('#ex-badges-sec', '全部成就', ' data-go="badges"')}
-            ${groups.map(x => ready ? `<li><a href="#ach-${x.g}" data-group="${x.g}" style="--g:${GROUP_COLOR[x.g] || ''}">
-                <span>${esc(x.label)}</span><span class="n">${x.done} / ${x.total}${x.unit ? ' ' + x.unit : ''}</span>
-                <span class="bar"><i style="width:${x.total ? (x.done / x.total * 100).toFixed(1) : 0}%"></i></span></a></li>`
-                : `<li><span class="toc-off"><span>${esc(x.label)}</span><span class="n">—</span></span></li>`).join('')}
+            ${groups.map(x => `<li><a href="#ach-${x.g}" data-group="${x.g}" style="--g:${GROUP_COLOR[x.g] || ''}">
+                <span>${esc(x.label)}</span><span class="n">${ready ? `${x.done} / ${x.total}${x.unit ? ' ' + x.unit : ''}` : '—'}</span>
+                <span class="bar"><i style="width:${ready && x.total ? (x.done / x.total * 100).toFixed(1) : 0}%"></i></span></a></li>`).join('')}
         </ul>`;
     toc.hidden = false;
     $('tocBtn').hidden = false;
 }
 
-/** 沒有資料：頂列的模式、匯入、報表按鈕收起；側邊欄改成骨架（不隱藏） */
+/** 還沒計算過（剛打開、沒有匯入）：頂列的模式、匯入、報表按鈕收起；側邊欄顯示未計算的目錄 */
 function hideToc() {
     $('modeSeg').hidden = true;
     $('importBtn').hidden = true;
@@ -707,18 +706,27 @@ function bindUi() {
         try { localStorage.setItem(PATH_KEY, app.includePath ? '1' : '0'); } catch (err) { /* 存不了只影響這次 */ }
         compute({ show: false });
     });
-    $('toc').addEventListener('click', e => {
+    $('toc').addEventListener('click', async e => {
         if (e.target.closest('.toc-path')) return;
         if (e.target.closest('[data-act="import"]')) { openToc(false); showLanding(); return; }
         if (e.target.closest('[data-act="report"]')) { openToc(false); openReport(); return; }
-        if (e.target.closest('[data-act="view"]')) { openToc(false); showExplore(); app.explore.showBadgeOverview(); return; }
+        const view = e.target.closest('[data-act="view"]');
         const a = e.target.closest('a');
-        if (!a || a.classList.contains('toc-help')) return;   // 使用說明：照連結另開分頁
+        if (!view && (!a || a.classList.contains('toc-help'))) return;   // 使用說明：照連結另開分頁
         openToc(false);
+        // 還沒計算過（沒有匯入）：先算，再照原本的目標跳過去
+        const lazy = !app.explore || !app.explore.data();
+        if (lazy) {
+            e.preventDefault();
+            await compute({ show: false });
+            if (!app.explore || !app.explore.data()) return;
+        }
+        if (view) { showExplore(); app.explore.showBadgeOverview(); return; }
         if ($('explore').hidden) showExplore();
         if (a.dataset.group) { e.preventDefault(); app.explore.jumpToGroup(a.dataset.group); return; }
         if (a.dataset.go === 'detail') $('ex-detail-sec').open = true;
         if (a.dataset.go === 'badges') $('ex-badges-sec').open = true;
+        if (lazy) document.querySelector(a.getAttribute('href'))?.scrollIntoView();
     });
 
     // 已匯入的來源：點整列切換勾選、全選、刪除所選
@@ -739,11 +747,13 @@ function bindUi() {
         if (!pick.length) return;
         const names = pick.map(s => `・${s.name || '未命名'}`).join('\n');
         if (!confirm(`刪除以下 ${pick.length} 個匯入的資料？\n${names}\n\n只會刪除這個瀏覽器裡的匯入結果，不會動到你的照片；刪除後需要重新匯入。`)) return;
-        if (pick.length === app.sources.length) await clearSources();
+        const all = pick.length === app.sources.length;
+        if (all) await clearSources();
         else for (const s of pick) await removeSource(s.id);
         app.sources = app.sources.filter(s => !ids.includes(s.id));
+        if (all) try { localStorage.removeItem(STEPS_KEY); } catch (err) { /* 只影響打勾 */ }   // 全部刪掉：三步驟從頭來
         renderSources();
-        if (app.sources.length) await compute({ show: false }); else hideToc();
+        if (app.sources.length || app.explore?.data()) await compute({ show: false }); else hideToc();
     });
 
     // 取消匯入
@@ -852,7 +862,7 @@ async function start() {
     app.sources = await listSources();
     renderSources();
     if (app.sources.length) await compute();
-    else hideToc();   // 還沒匯入：側邊欄顯示骨架
+    else hideToc();   // 還沒匯入：先不下載圖資，按「檢視成就」或目錄時才計算
 }
 
 start();
