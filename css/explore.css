@@ -299,14 +299,29 @@
     stroke-linejoin: round;
 }
 
+/* 放大彈窗的村里層畫在 canvas（js/explore.js paintCanvas）；svg 疊在上面接收觸控與滑鼠 */
+.ex-map-cv {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.ex-map-cv[hidden] {
+    display: none;
+}
+
 /* 放大彈窗拖曳、雙指縮放時用 transform 移動地圖（放開才重畫） */
 .ex-modal-map,
-.ex-modal .ex-map-hl {
+.ex-modal .ex-map-hl,
+.ex-modal .ex-map-cv {
     transform-origin: 0 0;
 }
 
 .ex-modal-map.dragging,
-.ex-modal-map.dragging + .ex-map-hl {
+.ex-modal-map.dragging ~ .ex-map-hl,
+.ex-modal-map.dragging ~ .ex-map-cv {
     will-change: transform;
 }
 
@@ -1980,8 +1995,4 @@ body.ex-modal-open {
 
 :root[data-theme="dark"] .ex-tform input[type="date"] {
     color-scheme: dark;
-}
-
-.ex-tform-hint {
-    color: var(--c-text-muted);
 }

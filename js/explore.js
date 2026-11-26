@@ -357,10 +357,23 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 : item.first ? yearColor(new Date(item.first * 1000).getUTCFullYear(), y0, y1) : '#ffcfb5';
             parts[on ? 'on' : 'off'].push(`<path d="${p.d}" data-code="${p.code}" class="${on ? 'on' : 'off'}"${fill ? ` style="fill:${fill}"` : ''}/>`);
         }
-        setViewBox(svg, m.viewBox);
+        // 放大彈窗的村里層（約 8,000 個區域）畫在 canvas：SVG 節點太多，iOS 重畫、拖曳都很慢，甚至卡住
+        // 這時 svg 是空的，只負責接收觸控、滑鼠，並提供視窗（viewBox）給 canvas 與外框疊層
+        const useCanvas = level === 'village' && svg.classList.contains('ex-modal-map');
+        if (useCanvas) {
+            const fills = new Map();
+            for (const p of m.paths) {
+                const item = idx.get(p.code);
+                if (item) fills.set(p.code, useConquer(level) ? conquerColor(item.n || 0) || '#ffcfb5'
+                    : item.first ? yearColor(new Date(item.first * 1000).getUTCFullYear(), y0, y1) : '#ffcfb5');
+            }
+            svg._cv = { ...canvasData(m), fills };
+        } else svg._cv = null;
+        if (svg._canvas) svg._canvas.hidden = !useCanvas;
+        setViewBox(svg, m.viewBox, false);
         svg.classList.toggle('fine', level === 'village');
         // 海岸線：同一層區域的聯集（data/map_*.json 的 coast），畫在最上面加粗描邊
-        svg.innerHTML = `<g class="ex-fog">${parts.off.join('')}</g><g class="ex-clear">${parts.on.join('')}</g>`
+        svg.innerHTML = useCanvas ? '' : `<g class="ex-fog">${parts.off.join('')}</g><g class="ex-clear">${parts.on.join('')}</g>`
             + (m.coast ? `<path class="ex-coast" d="${m.coast}"/>` : '');
         setHl(svg, null);
         svg._names = new Map(m.paths.map(p => [p.code, p.name]));
@@ -436,7 +449,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             svg._hl.setAttribute('preserveAspectRatio', svg.getAttribute('preserveAspectRatio') || 'xMidYMid meet');
             const vb = svg.getAttribute('viewBox');
             if (vb) svg._hl.setAttribute('viewBox', vb);
-            svg.after(svg._hl);
+            (svg._canvas || svg).after(svg._hl);
         }
         return svg._hl;
     }
@@ -446,11 +459,104 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         svg._hlCode = code;
         hlOf(svg).innerHTML = code ? `<path d="${el.getAttribute('d')}"/>` : '';
     }
-    /** 地圖與外框疊層一起換 viewBox */
-    function setViewBox(svg, vb) {
+    /** 地圖與外框疊層一起換 viewBox；村里 canvas 跟著重畫（paint=false 時不畫，等之後設定視窗再畫） */
+    function setViewBox(svg, vb, paint = true) {
         svg.setAttribute('viewBox', vb);
         hlOf(svg).setAttribute('viewBox', vb);
+        if (paint && svg._cv) paintCanvas(svg);
     }
+
+    // ---------- 村里層的 canvas 繪製與點選 ----------
+
+    // ST_AsSVG（相對座標）的路徑「M x y l dx dy … z」→ 外框範圍 [x0, y0, x1, y1]（剔除畫面外的區域、點選先篩）
+    function pathBox(d) {
+        const t = d.match(/[MmLlZz]|-?\d*\.?\d+(?:e-?\d+)?/g) || [];
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, cx = 0, cy = 0, sx = 0, sy = 0, cmd = 'M';
+        for (let i = 0; i < t.length;) {
+            const k = t[i];
+            if (/[A-Za-z]/.test(k)) { cmd = k; i++; if (k === 'z' || k === 'Z') { cx = sx; cy = sy; } continue; }
+            const a = +t[i], b = +t[i + 1];
+            i += 2;
+            if (cmd === 'M') { cx = sx = a; cy = sy = b; cmd = 'L'; }
+            else if (cmd === 'm') { cx = sx = cx + a; cy = sy = cy + b; cmd = 'l'; }
+            else if (cmd === 'L') { cx = a; cy = b; }
+            else { cx += a; cy += b; }
+            if (cx < x0) x0 = cx; if (cx > x1) x1 = cx; if (cy < y0) y0 = cy; if (cy > y1) y1 = cy;
+        }
+        return [x0, y0, x1, y1];
+    }
+    /** 每張地圖只準備一次：Path2D 與外框範圍 */
+    function canvasData(m) {
+        if (!m._cv) m._cv = {
+            items: m.paths.map(p => ({ code: p.code, d: p.d, p2d: new Path2D(p.d), box: pathBox(p.d) })),
+            coast: m.coast ? new Path2D(m.coast) : null,
+        };
+        m._cv.byCode = m._cv.byCode || new Map(m._cv.items.map(x => [x.code, x]));
+        return m._cv;
+    }
+    function canvasOf(svg) {
+        if (!svg._canvas) {
+            hlOf(svg);
+            svg._canvas = document.createElement('canvas');
+            svg._canvas.className = 'ex-map-cv';
+            svg._canvas.setAttribute('aria-hidden', 'true');
+            svg.after(svg._canvas);   // 順序：svg（接收事件）→ canvas → 外框疊層
+        }
+        return svg._canvas;
+    }
+    /** 目前視窗（svg 的 viewBox，meet 置中）與螢幕的對應 */
+    function viewOf(svg) {
+        const r = svg.parentNode.getBoundingClientRect();
+        const [vx, vy, vw, vh] = svg.getAttribute('viewBox').split(/[\s,]+/).map(Number);
+        const s = Math.max(vw / r.width, vh / r.height);
+        return { r, vx, vy, s, ox: (r.width - vw / s) / 2, oy: (r.height - vh / s) / 2 };
+    }
+    function paintCanvas(svg) {
+        const cv = svg._cv, c = canvasOf(svg);
+        c.hidden = false;
+        const { r, vx, vy, s, ox, oy } = viewOf(svg);
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+        if (c.width !== w) c.width = w;
+        if (c.height !== h) c.height = h;
+        const ctx = c.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        const k = dpr / s;
+        ctx.setTransform(k, 0, 0, k, (ox - vx / s) * dpr, (oy - vy / s) * dpr);
+        // 畫面範圍（地圖座標）外的區域不畫
+        const mx0 = vx - ox * s, my0 = vy - oy * s, mx1 = mx0 + r.width * s, my1 = my0 + r.height * s;
+        const vis = cv.items.filter(x => x.box[2] >= mx0 && x.box[0] <= mx1 && x.box[3] >= my0 && x.box[1] <= my1);
+        const css = getComputedStyle(svg), v = n => css.getPropertyValue(n).trim();
+        // 同 CSS：未解鎖 --c-text-faint（不透明度 0.75）、界線 --c-surface 0.25px、海岸線 --c-map-coast 1.1px
+        ctx.fillStyle = v('--c-text-faint');
+        ctx.globalAlpha = 0.75;
+        for (const x of vis) if (!cv.fills.has(x.code)) ctx.fill(x.p2d);
+        ctx.globalAlpha = 1;
+        for (const x of vis) { const f = cv.fills.get(x.code); if (f) { ctx.fillStyle = f; ctx.fill(x.p2d); } }
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = v('--c-surface');
+        ctx.lineWidth = 0.25 * s;
+        for (const x of vis) ctx.stroke(x.p2d);
+        if (cv.coast) { ctx.strokeStyle = v('--c-map-coast'); ctx.lineWidth = 1.1 * s; ctx.stroke(cv.coast); }
+    }
+    // canvas 模式沒有 path 元素：用 { dataset, getAttribute } 代替，_showTip、setHl 照常使用
+    const fakeEl = x => x && { dataset: { code: x.code }, getAttribute: () => x.d };
+    let hitCtx = null;
+    /** 螢幕上 (cx, cy) 的區域（path 元素或代替品）；沒有為 null */
+    function hitAt(svg, cx, cy) {
+        if (!svg._cv) {
+            const h = document.elementFromPoint(cx, cy);
+            return h && svg.contains(h) && h.dataset && h.dataset.code ? h : null;
+        }
+        const { r, vx, vy, s, ox, oy } = viewOf(svg);
+        const mx = vx + (cx - r.left - ox) * s, my = vy + (cy - r.top - oy) * s;
+        hitCtx = hitCtx || document.createElement('canvas').getContext('2d');
+        const x = svg._cv.items.find(x => mx >= x.box[0] && mx <= x.box[2] && my >= x.box[1] && my <= x.box[3] && hitCtx.isPointInPath(x.p2d, mx, my));
+        return fakeEl(x) || null;
+    }
+    /** 某代碼的區域（path 元素或代替品） */
+    const findEl = (svg, code) => svg._cv ? fakeEl(svg._cv.byCode.get(code)) : svg.querySelector(`path[data-code="${code}"]`);
 
     // 滑過顯示名稱與首次解鎖日期
     // 觸控時不用滑鼠事件（手指按下會補送 mousemove，雙指縮放時會誤選）；觸控的選取由放大彈窗的「單指點一下」處理
@@ -478,7 +584,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         svg.addEventListener('mousemove', e => {
             if (Date.now() - touchAt < 1500 || svg._pin) return;
             if (svg._dragging) { tip.hidden = true; return; }
-            svg._showTip(e.target, e.clientX, e.clientY);
+            svg._showTip(svg._cv ? hitAt(svg, e.clientX, e.clientY) : e.target, e.clientX, e.clientY);
         });
         svg.addEventListener('mouseleave', () => { if (Date.now() - touchAt >= 1500 && !svg._pin) svg._showTip(null); });
         if (interactive) bindTipManual(svg, tip, wrap);
@@ -526,21 +632,22 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             if (t.dataset.tadd !== undefined && info) {
                 t.closest('.ex-tip-act').innerHTML = `<div class="ex-tform">
                     <label>造訪日期 <input type="date" max="${todayStr()}"></label>
-                    <div class="ex-tform-hint">日期可以不填。${info.town ? `記在鄉鎮中心所在的「${esc(info.label.split(' ').pop())}」；` : '記在村里中心；'}只解鎖這個村里，不會解鎖附近的景點、車站等成就。</div>
                     <div class="ex-mform-msg" hidden></div>
                     <div class="ex-mform-btns"><button type="button" class="ex-mbtn primary" data-tok>加入</button>
                         <button type="button" class="ex-mbtn" data-tcancel>取消</button></div></div>`;
                 placeTip(tip, wrap, svg._pin.x, svg._pin.y);
                 tip.querySelector('input').focus();
             } else if (t.dataset.tcancel !== undefined) {
-                svg._showTip(svg.querySelector(`path[data-code="${code}"]`), svg._pin.x, svg._pin.y, true);
+                svg._showTip(findEl(svg, code), svg._pin.x, svg._pin.y, true);
             } else if (t.dataset.tok !== undefined && info) {
                 const date = tip.querySelector('.ex-tform input').value;
                 const msg = tip.querySelector('.ex-mform-msg');
                 if (date && date > todayStr()) { msg.hidden = false; msg.textContent = '日期不能在未來'; return; }
                 tip.querySelectorAll('button').forEach(b => { b.disabled = true; });
+                t.textContent = '加入中…';
                 const err = await manualApi.add(info, date);
                 if (err) {
+                    t.textContent = '加入';
                     tip.querySelectorAll('button').forEach(b => { b.disabled = false; });
                     msg.hidden = false; msg.textContent = err;
                 }
@@ -602,7 +709,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         // 視窗：svg._vb 是目前的視窗；shown 是實際畫在 viewBox 上的視窗
         // 拖曳、雙指縮放時只用 CSS transform 移動、縮放已畫好的地圖（不重畫），放開才改 viewBox 重畫一次（iOS 才順）
         let shown = null, raf = 0;
-        const setXf = t => { svg.style.transform = t; hlOf(svg).style.transform = t; };
+        const setXf = t => { svg.style.transform = t; hlOf(svg).style.transform = t; if (svg._canvas) svg._canvas.style.transform = t; };
         const draw = v => {
             cancelAnimationFrame(raf); raf = 0;
             shown = v;
@@ -624,6 +731,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         };
         const commitVb = () => { if (svg._vb && (raf || svg.style.transform)) draw(svg._vb); };
         svg._draw = draw;
+        if (window.ResizeObserver) new ResizeObserver(() => { if (svg._cv && !modal.hidden && !svg._dragging) paintCanvas(svg); }).observe(body);
         // 螢幕座標 → 地圖座標（preserveAspectRatio=meet：取較大的縮放比，並扣掉置中留白）
         // 用外框（地圖填滿它）量大小：手勢中地圖本身有 transform，量到的會不準
         const fit = v => {
@@ -716,12 +824,12 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                     lastTap = null;
                 } else {
                     lastTap = { t: now, x: e.clientX, y: e.clientY };
-                    const el = e.target, x = e.clientX, y = e.clientY;
+                    const x = e.clientX, y = e.clientY, el = svg._cv ? hitAt(svg, x, y) : e.target;
                     tapTimer = setTimeout(() => svg._showTip(el, x, y, true), 300);
                 }
             } else if (e.type === 'pointerup' && e.pointerType === 'mouse' && e.button === 0 && drag && !drag.moved && !pinch) {
                 // 滑鼠點一下：固定泡泡（可補點）；點同一區或空白處收起
-                const hit = document.elementFromPoint(e.clientX, e.clientY), code = hit && svg.contains(hit) && hit.dataset ? hit.dataset.code : null;
+                const hit = hitAt(svg, e.clientX, e.clientY), code = hit ? hit.dataset.code : null;
                 if (code && svg._pin && svg._pin.code === code) svg._showTip(null);
                 else svg._showTip(code ? hit : null, e.clientX, e.clientY, true);
             }
@@ -766,7 +874,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (!prev) svg.innerHTML = '';
         modal.querySelector('.ex-modal-legend').innerHTML = '';
         loading.hidden = !!prev;
-        loading.textContent = level === 'village' ? '載入村里地圖中（約 240 KB）…' : '載入地圖中…';
+        loading.textContent = level === 'village' ? '載入村里地圖中（約 380 KB）…' : '載入地圖中…';
         let m;
         try {
             m = await getMap(level);
@@ -782,7 +890,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (prev) { svg._vb = prev.vb; svg._draw(prev.vb); }
         else svg._goRegion(DEFAULT_REGION);
         modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1, level);
-        const el = prev && prev.pin && svg.querySelector(`path[data-code="${prev.pin.code}"]`);
+        const el = prev && prev.pin && findEl(svg, prev.pin.code);
         if (el) svg._showTip(el, prev.pin.x, prev.pin.y, true);
     }
 
@@ -1304,6 +1412,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (!state.data) return;
         renderYearly();
         if (dmodal && !dmodal.hidden && dmodal._data) drawDetailMap(dmodal._data.geo);
+        const msvg = modal && modal.querySelector('svg');
+        if (msvg && msvg._cv && !modal.hidden) paintCanvas(msvg);   // 村里 canvas 用到主題色
     });
 
     return {
