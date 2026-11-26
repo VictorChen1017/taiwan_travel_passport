@@ -194,7 +194,7 @@ if ($want('areas')) {
 }
 
 // ======================================================================
-// achievements.json：里程碑、旅行門檻、地點類成就（極點、離島、景點、B 級景點、國家公園與保護區）
+// achievements.json：里程碑、旅行門檻、地點類成就（極點、離島、景點、B 級景點、國家公園與保護區）、節慶活動
 // ======================================================================
 
 if ($want('achievements')) {
@@ -278,15 +278,37 @@ if ($want('achievements')) {
     $counts = array_count_values(array_column($places, 'group'));
     echo '  ' . implode('、', array_map(fn($g, $n) => "$g $n", array_keys($counts), $counts)) . "\n";
 
+    // 節慶活動：年份表補齊（第一屆到最後一筆，沒列的年份用預設值）；之後的年份由前端用預設值推算
+    $festivals = [];
+    foreach ($cfg['festivals'] ?? [] as $f) {
+        if (isset($ids[$f['id']])) warn("成就 id 重複：{$f['id']}");
+        $ids[$f['id']] = true;
+        [$d0, $d1] = $f['default'];
+        $last = max(array_keys($f['seasons']) ?: [$f['first']]);
+        $seasons = [];
+        for ($y = $f['first']; $y <= $last; $y++) {
+            $seasons[] = [$y, ...($f['seasons'][$y] ?? ["$y-$d0", ($y + 1) . "-$d1"])];
+        }
+        $festivals[] = ['id' => $f['id'], 'group' => 'festival', 'name' => $f['name'], 'desc' => $f['desc'],
+                        'tier' => $f['tier'] ?? 'gold', 'icon' => $f['icon'] ?? 'star',
+                        'scene' => $f['scene'] ?? 'xmas', 'stamp' => $f['stamp'] ?? [$f['name'], ''],
+                        'points' => $f['points'], 'radius' => (float)$f['radius'], 'hours' => $f['hours'],
+                        'default' => $f['default'], 'seasons' => $seasons];
+    }
+    echo '  festival ' . count($festivals) . "
+";
+
     write_json('achievements.json', [
         '_format' => [
             'milestones' => '各層門檻 [數量, 等級]；全制霸一級由前端依實際總數加上',
             'travel' => '旅行成就門檻；regular_photos 只在照片模式使用',
             'places' => '地點類成就，判定三選一：points+radius（公尺）／villages（村里代碼）／areas（areas.topo.json 的 id）；four＝本島四極；rep＝以範圍判定者的代表點 [緯度, 經度]（手動紀錄用，ST_PointOnSurface）',
+            'festivals' => '節慶活動（年份集點卡）：points+radius 內、hours [起, 迄] 點之間、seasons [[年份, 開城日, 閉城日（含）]] 期間有足跡；seasons 之後的年份用 default [月-日, 隔年月-日]；scene＝像素場景、stamp＝戳章上的字 [上, 下]',
         ],
         'milestones' => $cfg['milestones'],
         'travel' => $cfg['travel'],
         'places' => $places,
+        'festivals' => $festivals,
     ]);
 
     // 明細小地圖的範圍外框（以村里或保護區判定的地點）：合併後依大小簡化（約 1/800 寬度），同原專案

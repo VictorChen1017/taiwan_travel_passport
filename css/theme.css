@@ -29,6 +29,8 @@
     --c-accent-strong: #e03d0c;
     --c-accent-soft: #fff3ee;     /* 強調色的淡底 */
     --c-on-accent: #ffffff;       /* 放在強調色、深色塊上的文字 */
+    --c-fest-stamp: #c8102e;      /* 節慶活動集點卡的年份戳章（紅色印泥） */
+    --c-fest-stamp-bg: #fff4f4;
 
     /* 狀態色 */
     --c-primary: #0078d7;
@@ -88,6 +90,8 @@
     --c-accent-strong: #ff4d1a;
     --c-accent-soft: #3a2119;
     --c-on-accent: #ffffff;
+    --c-fest-stamp: #ff5a6e;
+    --c-fest-stamp-bg: #2a1518;
 
     --c-primary: #3b9eff;
     --c-primary-strong: #1f7fd9;

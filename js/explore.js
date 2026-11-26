@@ -15,8 +15,11 @@
 import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor, CONQUER_LEVELS, conquerColor } from './shared.js';
 import { TILE } from './tiles.js';
 import { TOUCH, tapWord } from './device.js';
+import { sceneSvg, stampTilt } from './xmas.js';
 
-export const GROUP_LABEL = { milestone: '里程碑', conquer: '制霸', pole: '極點', island: '離島', landmark: '景點', bspot: 'B 級景點', peak: '登山', rail: '臺鐵・高鐵', metro: '捷運', lrt: '輕軌', nature: '國家公園與保護區', travel: '旅行' };
+export const GROUP_LABEL = { milestone: '里程碑', conquer: '制霸', pole: '極點', island: '離島', landmark: '景點', bspot: 'B 級景點', peak: '登山', rail: '臺鐵・高鐵', metro: '捷運', lrt: '輕軌', nature: '國家公園與保護區', festival: '節慶活動', travel: '旅行' };
+// 隱藏類別：一個都還沒達成時不出現（成就目錄、總覽也不列）
+export const HIDDEN_GROUPS = new Set(['festival']);
 const UNIT_LABEL = { county: '縣市', town: '鄉鎮', village: '村里' };
 const PLACE_GROUPS = new Set(['pole', 'island', 'landmark', 'bspot', 'nature']);   // 有小地圖的地點類
 const COMPACT_GROUPS = new Set(['island', 'landmark', 'bspot', 'nature']);   // 數量多的類別用小卡片
@@ -760,6 +763,12 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         box.innerHTML = groups.map(g => {
             const items = list.filter(a => a.group === g);
             if (!items.length) return '';
+            if (g === 'festival') {
+                return `<details class="ex-badge-group" id="ach-${g}"${wasOpen.has(`ach-${g}`) ? ' open' : ''}>
+                    <summary class="ex-badge-group-title g-${g}">${GROUP_LABEL[g]}
+                        <span>${items.filter(a => a.done).length} / ${items.length}</span></summary>
+                    ${items.map(festivalCard).join('')}</details>`;
+            }
             const stamps = items.filter(a => a.cells), cards = items.filter(a => !a.cells);
             const sections = [...new Set(cards.map(a => a.section || ''))];
             const card = COMPACT_GROUPS.has(g) ? a => badgeCard(a, true) : a => badgeCard(a);
@@ -927,8 +936,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const ps = Object.values(POINT_STAMPS).find(p => d.id.startsWith(p.prefix));
         // 手動紀錄：地點類在最下方「我有去過，手動加入！」；集點卡在未到的列旁「＋ 我去過」；手動紀錄的列可刪除
         const canManual = !!manualApi;
-        const addBox = canManual && d.add ? `<div class="ex-madd">
-            <button type="button" class="ex-mbtn primary" data-madd="main">✋ ${rows.some(r => r.hit) ? '再加一筆手動紀錄' : '我有去過，手動加入！'}</button></div>` : '';
+        const addBox = canManual && d.add && !(d.add.years && !d.add.years.length) ? `<div class="ex-madd">
+            <button type="button" class="ex-mbtn primary" data-madd="main">✋ ${d.add.years ? '手動加入其他年份' : rows.some(r => r.hit) ? '再加一筆手動紀錄' : '我有去過，手動加入！'}</button></div>` : '';
         dmodal._addInfo = d.add || null;
         const withAct = canManual && rows.some(r => r.add || r.manual !== undefined);
         body.classList.toggle('with-act', withAct);
@@ -967,6 +976,20 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         dmodal.querySelectorAll('.ex-mform').forEach(f => f.remove());
         const f = document.createElement('div');
         f.className = 'ex-mform';
+        if (info.years) {
+            // 節慶活動：選年份（以那一屆的開城日記錄）
+            f.innerHTML = `<div class="ex-mform-title">✋ 手動加入「${esc(info.label)}」</div>
+                <label>哪一年 <select>${info.years.slice().reverse().map(y => `<option value="${y.date}">${y.year} 年（${y.range}）</option>`).join('')}</select></label>
+                <div class="ex-mform-hint">記在那一屆的開城日；只算這個成就，不會解鎖村里。</div>
+                <div class="ex-mform-msg" hidden></div>
+                <div class="ex-mform-btns"><button type="button" class="ex-mbtn primary" data-mok>加入</button>
+                    <button type="button" class="ex-mbtn" data-mcancel>取消</button></div>`;
+            f._info = info;
+            anchor.after(f);
+            f.querySelector('select').focus();
+            f.scrollIntoView({ block: 'nearest' });
+            return;
+        }
         f.innerHTML = `<div class="ex-mform-title">✋ 手動加入「${esc(info.label)}」</div>
             <label>造訪日期 <input type="date" max="${todayStr()}"></label>
             <div class="ex-mform-hint">日期可以不填：不填仍算去過，但不參與和日期有關的成就（例如每年新解鎖）。${info.area ? '<br>以範圍判定的地點只解鎖這個成就，不會解鎖村里。' : '<br>也會解鎖這個地點所在的村里。'}</div>
@@ -1007,7 +1030,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
     }
 
     async function submitAddForm(f) {
-        const date = f.querySelector('input').value;
+        const date = f.querySelector('input, select').value;
         const msg = f.querySelector('.ex-mform-msg');
         if (date && date > todayStr()) { msg.hidden = false; msg.textContent = '日期不能在未來'; return; }
         f.querySelectorAll('button').forEach(b => { b.disabled = true; });
@@ -1117,6 +1140,22 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 ${peak ? '<div class="ex-badge-more">📋 看明細與地圖</div>' : ''}</div>
             </div>
             <div class="ex-stamp-grid">${cells.map(cellHtml).join('')}</div>
+        </div>`;
+    }
+
+    // 節慶活動集點卡：像素場景（依 a.scene）＋去過的年份戳章（新到舊）
+    function festivalCard(a) {
+        const years = a.cells.length;
+        const stamps = a.cells.map(c => `<span class="ex-fest-stamp" style="--tilt:${stampTilt(c.year)}deg"
+            title="${c.year} 年：${c.date ? fmtDate(c.date) : '時間不明'}${c.auto ? '' : '（手動加入）'}">
+            <small>${esc(a.stamp?.[0] || '')}</small><b>${c.year}</b><small>${c.auto ? esc(a.stamp?.[1] || '') : '✋ 手動'}</small></span>`).join('');
+        return `<div class="ex-badge ex-fest done clickable" data-id="${esc(a.id)}" role="button" tabindex="0" title="${esc(a.desc)}
+（點擊看明細、手動加入其他年份）">
+            <div class="ex-fest-scene">${sceneSvg(a.scene, 'ex-fest-svg')}
+                <div class="ex-fest-title"><b>🎄 ${esc(a.name)}</b><span>已去過 ${years} 年</span></div>
+                <div class="ex-fest-stamps">${stamps}</div></div>
+            <div class="ex-badge-desc">${esc(a.desc)}</div>
+            <div class="ex-badge-more">📋 看明細・手動加入其他年份</div>
         </div>`;
     }
 

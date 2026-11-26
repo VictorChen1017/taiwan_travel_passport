@@ -868,6 +868,7 @@
 .ex-badge-group-title.g-lrt { border-color: #7cbd52; }
 .ex-badge-group-title.g-nature { border-color: #16a34a; }
 .ex-badge-group-title.g-travel { border-color: #8b5cf6; }
+.ex-badge-group-title.g-festival { border-color: #c8102e; }
 
 .ex-badge-group-title span {
     font-size: calc(14px * var(--fs, 1));
@@ -1783,4 +1784,116 @@ body.ex-modal-open {
 
 .ex-route-fold > .ex-badge-grid {
     padding: 12px;
+}
+
+/* 節慶活動集點卡（新北撒旦城）：像素風夜景＋年份戳章 */
+.ex-fest {
+    margin-bottom: 14px;
+    padding: 0 0 16px;
+    align-items: stretch;
+    text-align: left;
+    overflow: hidden;
+}
+
+.ex-fest:hover {
+    transform: none;
+}
+
+.ex-fest-scene {
+    /* 夜景鋪滿當背景；標題（左上）與戳章疊在上面，戳章多時往下長 */
+    position: relative;
+    min-height: calc(320px * var(--fs, 1));
+    padding: 16px 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.ex-fest-svg {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+
+.ex-fest-title {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    color: var(--c-on-accent);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.ex-fest-title b {
+    font-size: calc(22px * var(--fs, 1));
+}
+
+.ex-fest-title span {
+    font-size: calc(13px * var(--fs, 1));
+    opacity: 0.9;
+}
+
+.ex-fest > .ex-badge-desc,
+.ex-fest > .ex-badge-more {
+    padding: 0 16px;
+}
+
+.ex-fest > .ex-badge-desc {
+    margin-top: 10px;
+}
+
+/* 戳章放在夜景左半邊（右邊留給地標與耶誕樹） */
+.ex-fest-stamps {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    max-width: 55%;
+}
+
+@media (max-width: 600px) {
+    .ex-fest-stamps { max-width: 100%; }
+}
+
+.ex-fest-stamp {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: calc(72px * var(--fs, 1));
+    height: calc(72px * var(--fs, 1));
+    border-radius: 50%;
+    border: 3px solid var(--c-fest-stamp);
+    box-shadow: inset 0 0 0 2px var(--c-fest-stamp-bg), inset 0 0 0 3px var(--c-fest-stamp);
+    background: var(--c-fest-stamp-bg);
+    color: var(--c-fest-stamp);
+    transform: rotate(var(--tilt, 0deg));
+    line-height: 1.1;
+    font-family: "Courier New", monospace;
+}
+
+.ex-fest-stamp b {
+    font-size: calc(19px * var(--fs, 1));
+    letter-spacing: 1px;
+}
+
+.ex-fest-stamp small {
+    font-size: calc(9px * var(--fs, 1));
+    font-weight: bold;
+}
+
+/* 星星、彩燈閃爍（四組錯開） */
+.ex-fest-svg .xm-tw1 { animation: xm-twinkle 2.4s steps(2) infinite; }
+.ex-fest-svg .xm-tw2 { animation: xm-twinkle 3.1s steps(2) 0.6s infinite; }
+.ex-fest-svg .xm-tw3 { animation: xm-twinkle 2.7s steps(2) 1.2s infinite; }
+.ex-fest-svg .xm-tw4 { animation: xm-twinkle 3.6s steps(2) 1.8s infinite; }
+
+@keyframes xm-twinkle {
+    50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ex-fest-svg [class^="xm-tw"] { animation: none; }
 }

@@ -311,6 +311,16 @@ export function compute(R, S, opts = {}) {
         }
     }
 
+    // ---------- 節慶活動（年份集點卡；一年都沒去過就不列出） ----------
+
+    const festCells = {};
+    for (const f of cfg.festivals || []) {
+        const cells = festYears(f, R, T, now, pts, manualPlace.get(f.id), i => isManual({ K, REF }, i));
+        festCells[f.id] = cells;
+        if (!cells.length) continue;
+        add(f.id, 'festival', f.name, f.desc, f.icon, f.tier, 1, 1, cells[cells.length - 1].date, { cells, detail: true, scene: f.scene, stamp: f.stamp });   // 日期＝第一次去的那一年
+    }
+
     // ---------- 旅行 ----------
 
     const tr = cfg.travel;
@@ -380,7 +390,7 @@ export function compute(R, S, opts = {}) {
     }
 
     const stats = { ok: true, mode, generated: Math.floor(Date.now() / 1000), summary, counties, towns, villages, achievements };
-    const ctx = { R, S, mode, now, vill, inBounds, pts, T, valid, villN, villFirst, villages, peakCells, railCells, achievements,
+    const ctx = { R, S, mode, now, vill, inBounds, pts, T, valid, villN, villFirst, villages, peakCells, railCells, festCells, achievements,
                   villName, topVills, K, REF, manualPlace };
     return { stats, ctx };
 }
@@ -472,6 +482,28 @@ export function detail(ctx, id) {
         note = isPeak ? `已登頂 ${done} / ${cells.length} 座；地圖紅點為已登頂、灰點為未登頂；未登頂的山可以手動加入`
                       : `已到站 ${done} / ${cells.length} 站；地圖紅點為已到站、灰點為未到站；未到的車站可以手動加入`;
         geo = { marks: cells.map(c => [c.lat, c.lng, isPeak ? `#${c.code} ${c.name}` : c.name, c.done, c.code]) };   // code：手動加入時預先帶入
+    } else if (ctx.festCells[id]) {
+        // 節慶活動：每年一列（手動紀錄另列，可刪除）；可手動加入還沒蓋章的年份
+        const f = S.achievements.festivals.find(x => x.id === id);
+        const cells = ctx.festCells[id];
+        columns = ['年份', '時間'];
+        for (const c of cells) {
+            if (c.auto) rows.push({ date: c.auto, value: 1, hit: true, cells: [`${c.year} 年`, `${ymd(c.auto)} ${hm(c.auto)}`] });
+            for (const i of c.manual) {
+                rows.push({ date: T(i) ?? 0, value: 1, hit: true, cells: [`${c.year} 年`, '✋ 手動加入'], manual: ctx.REF[i] });
+            }
+        }
+        note = `已去過 ${cells.length} 年；判定：活動期間 ${pad(f.hours[0])}:00–${pad(f.hours[1])}:00 在範圍內有足跡`;
+        // 小地圖：範圍＋算進去的紀錄位置（期間內、時段內；最多 500 筆，新到舊）
+        const hits = [];
+        festYears(f, R, T, ctx.now, ctx.pts, null, i => isManual(ctx, i), hits);
+        const recent = hits.sort((x, y) => R.time[y] - R.time[x]).slice(0, 500);
+        geo = { points: f.points, radius: f.radius, photos: recent.map(i => [+R.lat[i].toFixed(5), +R.lng[i].toFixed(5)]) };
+        // 手動加入：選年份（以那一屆的開城日中午記錄；只算這個成就，不解鎖村里）
+        const have = new Set(cells.map(c => c.year));
+        const today = ymd(ctx.now - 6 * 3600);   // now 是現在＋14 小時；當地（UTC+8）今天
+        const years = festSeasons(f, ctx.now).filter(s => !have.has(s.year) && s.start <= today).map(s => ({ year: s.year, date: s.start, range: `${s.start} ～ ${s.end}` }));
+        addInfo = { target: id, label: f.name, lat: f.points[0][0], lng: f.points[0][1], area: true, years };
     } else {
         // 地點：每次造訪（以天為單位）
         const p = S.achievements.places.find(x => x.id === id);
@@ -511,6 +543,60 @@ export function detail(ctx, id) {
     const sort = id === 'regular' ? 'value' : 'date';
     rows.sort((x, y) => y[sort] - x[sort]);
     return { ok: true, id, name: a.name, desc: a.desc, sort, columns, rows, note, geo, add: addInfo };
+}
+
+/**
+ * 節慶活動的每一屆 [{ year, start, end, t0, t1 }]（start、end：'YYYY-MM-DD'，含 end 當天；t0、t1：秒，t1 不含）
+ * 設定檔的年份之後用預設值推算到 now 那一年
+ */
+export function festSeasons(f, now) {
+    const list = f.seasons.map(([year, start, end]) => ({ year, start, end }));
+    const lastYear = new Date(now * 1000).getUTCFullYear();
+    for (let y = list.length ? list[list.length - 1].year + 1 : lastYear; y <= lastYear; y++) {
+        list.push({ year: y, start: `${y}-${f.default[0]}`, end: `${y + 1}-${f.default[1]}` });
+    }
+    const sec = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 1000;
+    for (const s of list) { s.t0 = sec(s.start); s.t1 = sec(s.end) + DAY; }
+    return list;
+}
+
+/**
+ * 節慶活動有去過的年份（新到舊）[{ year, date, auto, manual: [紀錄編號] }]
+ * 自動：範圍內、活動期間、hours 之間（含迄的整點）的紀錄；手動（kind 4、target 為這個活動）：日期落在哪一屆
+ * date＝那一年最早的時間（auto＝自動紀錄的最早時間）
+ * hits：有給陣列時放入算進去的自動紀錄編號（明細小地圖用）
+ */
+function festYears(f, R, T, now, pts, manualIdx, isManualRec, hits = null) {
+    const seasons = festSeasons(f, now);
+    const seasonOf = t => seasons.find(s => t >= s.t0 && t < s.t1) || null;
+    const lo = f.hours[0] * 3600, hi = f.hours[1] * 3600;
+    const by = new Map();
+    const cell = y => { let c = by.get(y); if (!c) by.set(y, c = { year: y, date: null, auto: null, manual: [] }); return c; };
+    const seen = new Set();
+    for (const [la, lng] of f.points) pts.around(la, lng, f.radius, i => {
+        if (seen.has(i)) return;
+        seen.add(i);
+        if (isManualRec(i)) return;
+        const t = T(i);
+        if (t === null) return;
+        const sod = ((t % DAY) + DAY) % DAY;
+        if (sod < lo || sod > hi) return;
+        const s = seasonOf(t);
+        if (!s) return;
+        const c = cell(s.year);
+        c.auto = minNull(c.auto, t);
+        if (hits) hits.push(i);
+    });
+    for (const i of manualIdx || []) {
+        const t = T(i);
+        const s = t !== null ? seasonOf(t) : null;
+        if (s) cell(s.year).manual.push(i);
+    }
+    for (const c of by.values()) {
+        c.date = c.auto;
+        for (const i of c.manual) c.date = minNull(c.date, T(i));
+    }
+    return [...by.values()].sort((a, b) => b.year - a.year);
 }
 
 /** 地點範圍內的紀錄編號 */

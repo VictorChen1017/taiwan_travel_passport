@@ -5,12 +5,12 @@
 import { FogClient } from '../js/core/client.js';
 import * as manual from '../js/manual.js';
 import { exportBackup, parseBackup } from '../js/backup.js';
-import { renderReport, PRESETS, BLOCKS, subsOf, DEFAULT_SUB_OFF } from '../js/report.js';
+import { renderReport, renderFestivalGif, PRESETS, BLOCKS, subsOf, DEFAULT_SUB_OFF } from '../js/report.js';
 
 // 基準值：原專案照片（test/legacy/photos.json）在 2026-11-21 圖資下的結果
 const BASE = {
     county: [19, 22], town: [219, 368], village: [1287, 7975],
-    photoAchievements: [69, 258],    // 照片模式：達成 / 總數（含「老地方」）
+    photoAchievements: [70, 259],    // 照片模式：達成 / 總數（含「老地方」；2026-11-26 起含新北撒旦城，測試照片有去過）
     yushanVillage: '10008120011',    // 玉山主峰所在村里（東埔村）；照片裡沒有
 };
 
@@ -124,6 +124,79 @@ async function run() {
         const m = manual.emptyManual();
         m.items.push(manual.newItem({ target: 'x', label: 'x', lat: 23, lng: 121 }, '2024-01-02'));
         return res(!!manual.findSame(m, 'x', manual.dateToTime('2024-01-02')) && !manual.findSame(m, 'x', manual.dateToTime('2024-01-03')), '同日擋下、不同日可加');
+    });
+
+    // ---------- 節慶活動（新北撒旦城：年份集點卡） ----------
+    const fest = achDefs.festivals?.find(f => f.id === 'fest_xmas_ntpc');
+    const at = (ymdhm, dLat = 0) => {
+        const [d, h] = ymdhm.split(' ');
+        const [y, mo, da] = d.split('-').map(Number), [hh, mm] = h.split(':').map(Number);
+        return [fest.points[0][0] + dLat, fest.points[0][1], Date.UTC(y, mo - 1, da, hh, mm) / 1000];
+    };
+    const synth = list => ({ lat: Float64Array.from(list, x => x[0]), lng: Float64Array.from(list, x => x[1]), time: Float64Array.from(list, x => x[2]) });
+    await check('節慶活動', '年份判定：期間、時段、範圍；沒去過就不列出', async () => {
+        if (!fest) return res(false, 'achievements.json 沒有 festivals（要重新匯出成就）');
+        const none = await fog.compute(synth([at('2019-12-01 12:00'), at('2019-10-01 19:30'), at('2019-12-01 23:00'), at('2019-12-01 19:30', 0.01)]), 'visit');
+        const s = await fog.compute(synth([
+            at('2019-12-01 19:30'),            // 2019 年
+            at('2019-12-02 18:00'),            // 同一年：取最早
+            at('2025-01-01 21:59'),            // 跨年：算 2024 年
+            at('2020-12-31 20:00'),            // 2020 年提前關城（12/30）：不算
+            at('2013-02-10 19:00'),            // 2012 年預設期間到 1/3：不算
+            at('2014-02-14 22:00'),            // 2013 年延長到元宵（含 22:00 整）：算
+        ]), 'visit');
+        const a = ach(s, 'fest_xmas_ntpc');
+        const years = a ? a.cells.map(c => c.year).join(',') : '';
+        return res(!ach(none, 'fest_xmas_ntpc') && !!a && a.done && years === '2024,2019,2013' && a.date === at('2014-02-14 22:00')[2],
+            `沒去過 ${ach(none, 'fest_xmas_ntpc') ? '仍列出' : '不列出'}；年份 ${years}（應為 2024,2019,2013）`);
+    });
+    await check('節慶活動', '手動加入某一年（kind 4，不解鎖村里）、明細可選未蓋章的年份', async () => {
+        const m = manual.emptyManual();
+        m.items.push(manual.newItem({ target: fest.id, label: fest.name, lat: fest.points[0][0], lng: fest.points[0][1], area: true }, '2016-11-19'));
+        manual.refresh(m);
+        const s = await fog.compute(records(synth([at('2019-12-01 19:30')]), m), 'visit');
+        const a = ach(s, 'fest_xmas_ntpc');
+        const c16 = a?.cells.find(c => c.year === 2016);
+        const d = await fog.detail(fest.id);
+        const years = d.add?.years?.map(y => y.year) || [];
+        const ok = !!c16 && !c16.auto && c16.manual.length === 1 && s.summary.village.unlocked === 1
+            && d.ok && d.rows.some(r => r.manual === 0) && !years.includes(2016) && !years.includes(2019) && years.includes(2011)
+            && d.geo.photos?.length === 1;
+        return res(ok, `2016 ${c16 ? '有（手動）' : '沒有'}、村里 ${s.summary.village.unlocked}（應為 1）、可加入 ${years.length} 年、地圖藍點 ${d.geo.photos?.length ?? 0}（應為 1）`);
+    });
+    await check('節慶活動', '分享成就：去過才畫節慶活動區塊', async () => {
+        const env = s => ({ stats: s, meta: {}, maps: {} });
+        const o = { blocks: new Set(['festival']), missing: new Set(), hideDates: false, nickname: '', mapLevel: 'town' };
+        const yes = renderReport(o, env(await fog.compute(synth([at('2019-12-01 19:30'), at('2024-12-01 19:30')]), 'visit'))).height;
+        const no = renderReport(o, env(await fog.compute(synth([at('2019-12-01 12:00')]), 'visit'))).height;
+        return res(yes > no + 300, `去過 ${yes} px、沒去過 ${no} px`);
+    });
+
+    await check('節慶活動', '動圖（GIF）：8 格、解碼後和原圖接近、閃爍的格子不同', async () => {
+        const s = await fog.compute(synth([at('2019-12-01 19:30'), at('2024-12-01 19:30'), at('2025-12-01 19:30')]), 'visit');
+        const env = { stats: s, meta: {}, maps: {} };
+        const o = { blocks: new Set(['festival']), missing: new Set(), hideDates: false, nickname: '測試', mapLevel: 'town' };
+        const t0 = performance.now();
+        const blob = renderFestivalGif(o, env);
+        const ms = Math.round(performance.now() - t0);
+        if (!blob) return res(false, '沒有產生動圖');
+        if (!('ImageDecoder' in window)) return res(blob.size > 1000, `${Math.round(blob.size / 1024)} KB（瀏覽器不支援 ImageDecoder，沒有解碼比對）`);
+        const dec = new ImageDecoder({ data: await blob.arrayBuffer(), type: 'image/gif' });
+        await dec.tracks.ready;
+        const count = dec.tracks.selectedTrack.frameCount;
+        const pixels = async k => {
+            const { image } = await dec.decode({ frameIndex: k });
+            const c = new OffscreenCanvas(image.displayWidth, image.displayHeight);
+            const ctx = c.getContext('2d');
+            ctx.drawImage(image, 0, 0); image.close();
+            return ctx.getImageData(0, 0, c.width, c.height).data;
+        };
+        const src = k => { const { canvas } = renderReport({ ...o, xmasFrame: k }, env); return canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data; };
+        const diff = (a, b) => { let d = 0; for (let i = 0; i < a.length; i += 4) d += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); return d / (a.length / 4) / 3; };
+        const [g0, g2] = [await pixels(0), await pixels(2)];
+        const e0 = diff(g0, src(0)), e2 = diff(g2, src(2)), between = diff(g0, g2);
+        return res(count === 8 && e0 < 3 && e2 < 3 && between > 0,
+            `${count} 格、${Math.round(blob.size / 1024)} KB、${ms} ms；和原圖平均差 ${e0.toFixed(2)}／${e2.toFixed(2)}（< 3）、第 1 與第 3 格差 ${between.toFixed(3)}（> 0）`);
     });
 
     // ---------- 備份 ----------

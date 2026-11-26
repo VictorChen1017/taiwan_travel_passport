@@ -4,7 +4,7 @@
 // 網址加 ?dev 會出現「載入原專案測試資料」（test/ 不會部署）
 
 import { FogClient } from './core/client.js';
-import { createExplore, GROUP_LABEL } from './explore.js';
+import { createExplore, GROUP_LABEL, HIDDEN_GROUPS } from './explore.js';
 import { listSources, saveSource, removeSource, clearSources, newId } from './store.js';
 import * as exif from './adapters/exif.js';
 import * as gtl from './adapters/gtimeline.js';
@@ -580,7 +580,7 @@ function renderModeSeg() {
 function renderToc() {
     const toc = $('toc');
     const ready = !!(app.explore && app.explore.data());
-    const groups = ready ? app.explore.groups() : Object.keys(GROUP_LABEL).map(g => ({ g, label: GROUP_LABEL[g] }));
+    const groups = ready ? app.explore.groups() : Object.keys(GROUP_LABEL).filter(g => !HIDDEN_GROUPS.has(g)).map(g => ({ g, label: GROUP_LABEL[g] }));
     const item = (href, label, attrs = '') => `<li><a href="${href}"${attrs}>${label}</a></li>`;
     toc.innerHTML = `
         <button type="button" class="app-btn primary toc-import" data-act="view">🏅 查看成就</button>

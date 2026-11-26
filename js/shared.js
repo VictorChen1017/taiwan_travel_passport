@@ -7,7 +7,18 @@ export const TIER_LABEL = { bronze: '銅', silver: '銀', gold: '金', platinum:
 export const NO_TIER_COLOR = '#0284c7';   // 不分等級的卡片（鐵道）徽章色，同鐵道分類標題色
 
 // 分類標題色（同 css/explore.css 的 .ex-badge-group-title.g-*）
-export const GROUP_COLOR = { milestone: '#ff4d1a', conquer: '#e0a526', pole: '#3fa7c2', island: '#14b8a6', landmark: '#ec4899', bspot: '#7c3aed', peak: '#0f766e', rail: '#0284c7', metro: '#d90023', lrt: '#7cbd52', nature: '#16a34a', travel: '#8b5cf6' };
+export const GROUP_COLOR = { milestone: '#ff4d1a', conquer: '#e0a526', pole: '#3fa7c2', island: '#14b8a6', landmark: '#ec4899', bspot: '#7c3aed', peak: '#0f766e', rail: '#0284c7', metro: '#d90023', lrt: '#7cbd52', nature: '#16a34a', travel: '#8b5cf6', festival: '#c8102e' };
+
+// 節慶活動集點卡（js/xmas.js 的像素夜景）：夜空、星星、建築剪影、耶誕樹、年份戳章
+export const XMAS_COLORS = {
+    sky: ['#070b1f', '#0b1130', '#101640', '#161b4c', '#1d1f55', '#25235c', '#2e2662', '#382a66', '#432d68'],
+    star: ['#ffffff', '#fff6c8', '#cfe3ff'], moon: '#fdf1c0',
+    far: '#211d45', near: '#110e27', glass: '#33457c', win: ['#ffd56b', '#ffb347'],
+    ground: '#0d0b20', plaza: '#2a2550',
+    tree: '#1f8a42', treeDark: '#15642f', trunk: '#6b3e1f', top: '#ffd700',
+    lights: ['#ff4d4d', '#ffcc33', '#5bc0ff', '#ff7ad9'],
+    beacon: '#ff3b3b', glow: '#3d3470', stamp: '#c8102e',
+};
 
 // 徽章圖示（24×24 座標）
 export const ICONS = {
@@ -28,6 +39,7 @@ export const ICONS = {
     sun: 'M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM11 1h2v3.5h-2zm0 18.5h2V23h-2zM1 11h3.5v2H1zm18.5 0H23v2h-3.5zM4.2 5.6l1.4-1.4 2.5 2.5-1.4 1.4zm11.7 11.7 1.4-1.4 2.5 2.5-1.4 1.4zM4.2 18.4l2.5-2.5 1.4 1.4-2.5 2.5zM15.9 6.7l2.5-2.5 1.4 1.4-2.5 2.5z',
     camera: 'M9 3.5h6L16.6 6H21v14H3V6h4.4zM12 8.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zm0 2a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5z',
     ghost: 'M12 2a7 7 0 0 0-7 7v13l2.33-2 2.34 2L12 20l2.33 2 2.34-2L19 22V9a7 7 0 0 0-7-7zM9.5 8a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zm5 0a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z',
+    tree: 'M12 1.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6L12 7.5l-2.4 1.2.5-2.6-1.9-1.8 2.6-.4zM12 9l4 4.5h-2l4 4.5h-4.5v4h-3v-4H6l4-4.5H8z',
     leaf: 'M20.5 3.5C11 3 4.5 7.5 4.5 14c0 1.6.4 3 1.1 4.2L3 20.8 4.2 22l2.6-2.6c1.2.7 2.6 1.1 4.2 1.1 6.5 0 11-6.5 9.5-17zM8.5 17.5l7-7-1.2-1.2-7 7z',
 };
 

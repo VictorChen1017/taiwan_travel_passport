@@ -14,6 +14,8 @@
 // 繪製分兩次：先「量」（dry，只算高度），再依總高度建立畫布真正畫出來
 
 import { GROUP_LABEL, POINT_STAMPS } from './explore.js';
+import { paintScene, sceneSize, stampTilt, XMAS_FRAMES, XMAS_FRAME_MS } from './xmas.js';
+import { encodeGif } from './gif.js';
 import { canShareFile } from './device.js';
 import { GROUP_COLOR, ICONS, shapeOf, badgeColors, yearColor, EARLY_YEAR, YEAR_COLOR_FROM, YEAR_COLOR_TO, UNKNOWN_YEAR_COLOR, YEARLY_BAR_COLOR, CONQUER_LEVELS, conquerColor } from './shared.js';
 
@@ -41,6 +43,7 @@ export const BLOCKS = [
     { id: 'landmark', label: '景點', missing: true },
     { id: 'bspot', label: 'B 級景點', missing: true },
     { id: 'nature', label: '國家公園與保護區', missing: true },
+    { id: 'festival', label: '節慶活動', festival: true },   // festival：至少去過一次才出現在清單
     { id: 'travel', label: '旅行成就', missing: true },
 ];
 // 預設組合只決定勾哪些區塊；子項目用下面的 DEFAULT_SUB_OFF，切換組合時保留使用者自己改過的
@@ -657,12 +660,85 @@ function paintRail(group) {
     };
 }
 
+// ---------- 節慶活動（像素風夜景＋去過的年份戳章） ----------
+
+// 版面同成就頁：像素場景當背景，名稱在左上、年份戳章（新到舊）疊在左半邊；戳章多時場景變高
+// 每個節慶活動一張卡（場景依 a.scene，戳章文字依 a.stamp）
+// o.xmasFrame：動圖的第幾格（沒有＝靜態）
+function paintFestival(g, y, { o, ach, date }) {
+    const C = g.c;
+    const list = ach.filter(a => a.group === 'festival' && a.done);
+    if (!list.length) return y - 22;
+    const years = list.reduce((n, a) => n + a.cells.length, 0);
+    const frame = o.xmasFrame ?? -1;
+    return card(g, y, { title: '節慶活動', color: GROUP_COLOR.festival, right: `已去過 ${years} 年` }, (x, y0, w) => {
+        let yy = y0;
+        list.forEach((a, k) => {
+            if (k) yy += 24;
+            const pad = 24, r = 46, gap = 18, withDate = !!date(1);
+            const areaW = Math.max(2 * r + 2 * pad, w * 0.55);
+            const cols = Math.max(1, Math.floor((areaW - 2 * pad + gap) / (2 * r + gap)));
+            const rowH = 2 * r + (withDate ? 24 : 0) + gap;
+            const titleH = 74;
+            const needH = pad + titleH + Math.ceil(a.cells.length / cols) * rowH - gap + pad;
+            const [sw, shh] = sceneSize(a.scene);
+            const sh = Math.max(w * shh / sw, needH);
+            if (!g.dry) {
+                const ctx = g.ctx;
+                ctx.save();
+                ctx.beginPath(); ctx.roundRect(x, yy, w, sh, 12); ctx.clip();
+                paintScene(ctx, a.scene, x, yy, w, sh, frame);
+                ctx.restore();
+            }
+            g.text(`🎄 ${a.name}`, x + pad, yy + pad, { size: 30, weight: 'bold', color: C.onAccent });
+            g.text(`已去過 ${a.cells.length} 年`, x + pad, yy + pad + 42, { size: 17, color: C.onAccent });
+            const top = yy + pad + titleH;
+            a.cells.forEach((c, i) => {
+                const cx = x + pad + (i % cols) * (2 * r + gap) + r, cy = top + Math.floor(i / cols) * rowH + r;
+                if (!g.dry) {
+                    const ctx = g.ctx, tilt = stampTilt(c.year) * Math.PI / 180;
+                    ctx.save();
+                    ctx.translate(cx, cy); ctx.rotate(tilt);
+                    ctx.strokeStyle = C.festStamp; ctx.fillStyle = C.festStampBg;
+                    ctx.beginPath(); ctx.arc(0, 0, r - 2, 0, Math.PI * 2); ctx.fill();
+                    ctx.lineWidth = 4; ctx.stroke();
+                    ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, r - 9, 0, Math.PI * 2); ctx.stroke();
+                    ctx.translate(-cx, -cy);
+                    g.text(a.stamp?.[0] || '', cx, cy - 26, { size: 13, weight: 'bold', color: C.festStamp, align: 'center' });
+                    g.text(String(c.year), cx, cy - 12, { size: 25, weight: 'bold', color: C.festStamp, align: 'center' });
+                    g.text(c.auto ? a.stamp?.[1] || '' : '✋ 手動', cx, cy + 16, { size: 11, weight: 'bold', color: C.festStamp, align: 'center' });
+                    ctx.restore();
+                }
+                if (withDate && c.date) g.text(date(c.date), cx, cy + r + 5, { size: 13, color: C.onAccent, align: 'center' });
+            });
+            yy += sh + 14;
+            g.text(a.desc, x, yy, { size: 15, color: C.muted, maxW: w });
+            yy += 24;
+        });
+        return yy;
+    });
+}
+
+/**
+ * 節慶活動動圖（GIF）：只有標題與節慶活動區塊（所有節慶的卡片），場景裡的閃爍組會閃
+ * @returns Blob（image/gif）；沒有節慶活動成就時為 null
+ */
+export function renderFestivalGif(o, env) {
+    if (!env.stats.achievements.some(a => a.group === 'festival' && a.done)) return null;
+    const frames = [];
+    for (let f = 0; f < XMAS_FRAMES; f++) {
+        const { canvas } = renderReport({ ...o, blocks: new Set(['festival']), xmasFrame: f }, env);
+        frames.push(canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height));
+    }
+    return new Blob([encodeGif(frames, XMAS_FRAME_MS)], { type: 'image/gif' });
+}
+
 const BLOCK_PAINT = {
     summary: paintSummary, map: paintMap, yearly: paintYearly, conquer: paintConquer, villages: paintVillages,
     milestone: paintBadgeGroup('milestone'), peak: paintPeaks,
     rail: paintRail('rail'), metro: paintRail('metro'), lrt: paintRail('lrt'),
     pole: paintBadgeGroup('pole'), island: paintBadgeGroup('island'), landmark: paintBadgeGroup('landmark'),
-    bspot: paintBadgeGroup('bspot'), nature: paintBadgeGroup('nature'), travel: paintBadgeGroup('travel'),
+    bspot: paintBadgeGroup('bspot'), nature: paintBadgeGroup('nature'), festival: paintFestival, travel: paintBadgeGroup('travel'),
 };
 
 /** 主題色（每次繪製時重新讀，切換深淺色後立即反映） */
@@ -674,6 +750,7 @@ function themeColors() {
         text: get('--c-text'), strong: get('--c-text-strong'), muted: get('--c-text-muted'), faint: get('--c-text-faint'),
         accent: get('--c-accent'), onAccent: get('--c-on-accent'),
         fog: get('--c-fog'), fogLine: get('--c-fog-line'), badgeOff: get('--c-badge-off'), badgeOffRing: get('--c-badge-off-ring'),
+        festStamp: get('--c-fest-stamp'), festStampBg: get('--c-fest-stamp-bg'),
     };
 }
 
@@ -784,6 +861,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
                 <div class="rp-foot">
                     <span class="rp-size" id="rp-size"></span>
                     <button type="button" class="rp-btn" data-act="close">關閉</button>
+                    <button type="button" class="rp-btn" id="rp-gif" hidden title="只含標題與節慶活動區塊（GIF），場景裡的星星與燈光會閃">🎞 下載動圖</button>
                     <button type="button" class="rp-btn primary" id="rp-save">${canShareFile() ? '📤 分享／儲存' : '⬇ 下載 PNG'}</button>
                 </div>
             </div>`;
@@ -820,6 +898,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
             syncForm(); schedule();
         });
         $('rp-save').addEventListener('click', save);
+        $('rp-gif').addEventListener('click', saveGif);
         document.addEventListener('themechange', () => { if (modal && !modal.hidden) schedule(); });
     }
 
@@ -839,6 +918,10 @@ export function createReport({ getStats, loadMap, getMeta }) {
         $('rp-color').value = o.mapColor;
         $('rp-color').disabled = !(o.blocks.has('map') && canConquer(o.mapLevel, stats));
         modal.querySelectorAll('[data-block]').forEach(b => { b.checked = o.blocks.has(b.dataset.block); });
+        // 節慶活動：至少去過一次才出現
+        const fest = !!stats?.achievements.some(a => a.group === 'festival' && a.done);
+        modal.querySelector('[data-block="festival"]').closest('li').hidden = !fest;
+        $('rp-gif').hidden = !(fest && o.blocks.has('festival'));
         // 進階選項：區塊有勾才展開
         modal.querySelectorAll('[data-adv]').forEach(box => {
             const id = box.dataset.adv, off = o.subOff[id] || [];
@@ -919,8 +1002,32 @@ export function createReport({ getStats, loadMap, getMeta }) {
         const out = (o.nickname || '').trim() ? last : renderReport(paintOpts(), { stats: getStats(), meta: getMeta(), maps });
         const blob = await new Promise(res => out.canvas.toBlob(res, 'image/png'));
         if (!blob) { alert('無法產生圖片（可能是內容太長），請減少區塊後再試。'); return; }
-        const filename = `台灣旅遊護照成就報表-${todayStr()}.png`;
-        const file = new File([blob], filename, { type: 'image/png' });
+        await deliver(blob, `台灣旅遊護照成就報表-${todayStr()}.png`);
+    }
+
+    /** 節慶活動動圖：產生 GIF 後分享或下載 */
+    async function saveGif() {
+        const btn = modal.querySelector('#rp-gif');
+        if (btn.disabled) return;
+        btn.disabled = true;
+        const label = btn.textContent;
+        btn.textContent = '⏳ 產生動圖中…';
+        try {
+            await new Promise(r => setTimeout(r, 30));   // 先讓按鈕文字更新
+            const blob = renderFestivalGif(paintOpts(), { stats: getStats(), meta: getMeta(), maps });
+            if (!blob) { alert('還沒有節慶活動的成就，無法產生動圖。'); return; }
+            await deliver(blob, `台灣旅遊護照節慶活動-${todayStr()}.gif`);
+        } catch (e) {
+            alert('動圖產生失敗：' + (e && e.message || e));
+        } finally {
+            btn.disabled = false;
+            btn.textContent = label;
+        }
+    }
+
+    /** 手機可分享就開分享選單，否則下載 */
+    async function deliver(blob, filename) {
+        const file = new File([blob], filename, { type: blob.type });
         if (canShareFile(file)) {
             try { await navigator.share({ files: [file], title: filename }); document.dispatchEvent(new Event('reportsaved')); return; }
             catch (e) { if (e.name === 'AbortError') return; }
