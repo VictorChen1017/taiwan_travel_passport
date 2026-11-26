@@ -14,6 +14,7 @@ import { GROUP_COLOR } from './shared.js';
 import { createReport } from './report.js';
 import { TOUCH } from './device.js';
 import { openGuide, guideSeen } from './guide.js';
+import { startTour, endTour, tourSeen } from './tour.js';
 
 const STEPS_KEY = 'fog-steps-done';    // 首頁三步驟：看過成就、匯出過卡片（localStorage，只是顯示用）
 const PATH_KEY = 'fog-include-path';   // 「包含移動路徑」記在 localStorage（只是顯示偏好）
@@ -534,6 +535,7 @@ function busy(text, opts = {}) {
 }
 
 function showLanding() {
+    endTour();
     $('explore').hidden = true;
     $('landing').hidden = false;
     renderSources();
@@ -548,6 +550,14 @@ function showExplore() {
     $('importBtn').hidden = false;
     $('reportBtn').hidden = false;
     if (fromLanding) window.scrollTo(0, 0);
+    endTour();
+    // 新手導覽第二段：匯入資料後第一次進成就頁（等版面排好再開始）
+    if (app.sources.length && !tourSeen('explore')) setTimeout(() => startTour('explore'), 400);
+}
+
+/** 重看導覽：在首頁看首頁那段，在成就頁看成就頁那段 */
+function replayTour() {
+    startTour($('landing').hidden ? 'explore' : 'landing');
 }
 
 // ---------- 成就報表（js/report.js） ----------
@@ -588,6 +598,7 @@ function renderToc() {
         <button type="button" class="app-btn primary toc-import" data-act="view">🏅 查看成就</button>
         <button type="button" class="app-btn toc-import" data-act="import">📂 匯入資料</button>
         <button type="button" class="app-btn toc-report" data-act="report">📤 分享成就</button>
+        <button type="button" class="app-btn toc-report" data-act="tour">▶ 頁面導覽</button>
         <a class="app-btn toc-report toc-help" href="help.html" target="_blank" rel="noopener">❓ 使用說明</a>
         ${ready && hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path">
             <input type="checkbox" id="pathToggle"${app.includePath ? ' checked' : ''}> 包含移動路徑
@@ -682,6 +693,7 @@ function bindUi() {
     $('viewBtn').addEventListener('click', () => compute());
 
     // 首頁三步驟：匯入 → 捲到資料來源；檢視成就；匯出卡片（先算好再開分享成就）
+    $('tourBtn').addEventListener('click', replayTour);
     $('steps').addEventListener('click', async e => {
         const step = e.target.closest('.app-step:not(:disabled)')?.dataset.step;
         if (step === 'import') {
@@ -712,6 +724,7 @@ function bindUi() {
         if (e.target.closest('.toc-path')) return;
         if (e.target.closest('[data-act="import"]')) { openToc(false); showLanding(); return; }
         if (e.target.closest('[data-act="report"]')) { openToc(false); openReport(); return; }
+        if (e.target.closest('[data-act="tour"]')) { openToc(false); replayTour(); return; }
         const view = e.target.closest('[data-act="view"]');
         const a = e.target.closest('a');
         if (!view && (!a || a.classList.contains('toc-help'))) return;   // 使用說明：照連結另開分頁
@@ -864,7 +877,11 @@ async function start() {
     app.sources = await listSources();
     renderSources();
     if (app.sources.length) await compute();
-    else hideToc();   // 還沒匯入：先不下載圖資，按「檢視成就」或目錄時才計算
+    else {
+        hideToc();   // 還沒匯入：先不下載圖資，按「檢視成就」或目錄時才計算
+        // 新手導覽第一段：第一次打開、還沒匯入
+        if (!tourSeen('landing')) setTimeout(() => $('landing').hidden || startTour('landing'), 300);
+    }
 }
 
 start();

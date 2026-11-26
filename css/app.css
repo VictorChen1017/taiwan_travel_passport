@@ -1249,3 +1249,82 @@ a.app-btn {
     text-decoration: underline;
     cursor: pointer;
 }
+
+/* ---------- 新手導覽（js/tour.js）：遮罩挖洞＋說明泡泡；在頁首、側邊欄之上，放大地圖（2000）、計算中（3000）之下 ----------
+   整層放在整頁座標上（position: absolute，寬高由 JS 設成整頁大小），跟內容一起捲動；過場只用 clip-path、transform、opacity */
+.tour {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 1500;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .2s;
+}
+.tour.on { opacity: 1; }
+.tour[hidden] { display: none; }
+.tour-mask {
+    position: absolute;
+    inset: 0;
+    background: var(--c-backdrop);
+    pointer-events: auto;   /* 調暗並擋住框外的點擊（被 clip-path 挖掉的洞點得到底下） */
+    transition: clip-path .3s ease;
+}
+.tour-hole {
+    position: absolute;
+    left: 0;
+    top: 0;
+    border-radius: 4px;
+    box-shadow: 0 0 0 2px var(--c-accent);
+    pointer-events: none;   /* 框住的地方照常可以點 */
+    transition: transform .3s ease, width .3s ease, height .3s ease;
+}
+.tour-pop {
+    position: absolute;
+    pointer-events: none;   /* 淡出時不能點 */
+    padding: 14px 16px 12px;
+    background: var(--c-surface);
+    color: var(--c-text);
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px var(--c-shadow-strong);
+    font-size: calc(14px * var(--fs, 1));
+    line-height: 1.6;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .15s, transform .2s ease;
+}
+.tour-pop.show {
+    pointer-events: auto;
+    opacity: 1;
+    transform: none;
+}
+.tour-count {
+    color: var(--c-text-muted);
+    font-size: calc(12px * var(--fs, 1));
+}
+.tour-title {
+    margin: 2px 0 4px;
+    color: var(--c-text-strong);
+    font-weight: 700;
+    font-size: calc(16px * var(--fs, 1));
+}
+.tour-btns {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+.tour-gap { flex: 1; }
+.tour-skip {
+    padding: 4px 0;
+    color: var(--c-text-muted);
+    font-size: calc(13px * var(--fs, 1));
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+.tour-skip:hover { color: var(--c-text); text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) {
+    .tour, .tour-mask, .tour-hole, .tour-pop { transition: none; }
+}
