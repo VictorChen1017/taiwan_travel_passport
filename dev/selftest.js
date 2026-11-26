@@ -7,9 +7,10 @@ import * as manual from '../js/manual.js';
 import { exportBackup, parseBackup } from '../js/backup.js';
 import { renderReport, renderFestivalGif, PRESETS, BLOCKS, subsOf, DEFAULT_SUB_OFF } from '../js/report.js';
 
-// 基準值：原專案照片（test/legacy/photos.json）在 2026-11-21 圖資下的結果
+// 基準值：原專案照片（test/legacy/photos.json）在 2026-11-26 圖資下的結果
+// （2026-11-26 換成內政部未簡化原檔、不留縫簡化：村里 1287 → 1289，邊界附近 11 個新進、9 個移出）
 const BASE = {
-    county: [19, 22], town: [219, 368], village: [1287, 7975],
+    county: [19, 22], town: [219, 368], village: [1289, 7975],
     photoAchievements: [71, 260],    // 照片模式：達成 / 總數（含「老地方」；2026-11-26 起含新北撒旦城、月老巡禮，測試照片都有去過）
     yushanVillage: '10008120011',    // 玉山主峰所在村里（東埔村）；照片裡沒有
 };
@@ -124,6 +125,31 @@ async function run() {
         const m = manual.emptyManual();
         m.items.push(manual.newItem({ target: 'x', label: 'x', lat: 23, lng: 121 }, '2024-01-02'));
         return res(!!manual.findSame(m, 'x', manual.dateToTime('2024-01-02')) && !manual.findSame(m, 'x', manual.dateToTime('2024-01-03')), '同日擋下、不同日可加');
+    });
+    // 迷霧地圖補點（SPEC §15.5）
+    let mapVill = null, mapTown = null;
+    await check('手動紀錄', '迷霧地圖資料都有代表點（村里 c；鄉鎮 c、v、vn）', async () => {
+        [mapVill, mapTown] = await Promise.all(['village', 'town'].map(lv => fetch(DATA + `map_${lv}.json`).then(r => r.json())));
+        const badV = mapVill.paths.filter(p => !Array.isArray(p.c) || p.c.length !== 2).length;
+        const badT = mapTown.paths.filter(p => !Array.isArray(p.c) || !p.v || p.v.slice(0, 8) !== p.code || !p.vn).length;
+        return res(badV === 0 && badT === 0, `村里 ${mapVill.paths.length}（缺 ${badV}）、鄉鎮 ${mapTown.paths.length}（缺或不符 ${badT}）`);
+    });
+    await check('手動紀錄', '迷霧地圖補點（kind 5）只解鎖該村里，不觸發地點成就', async () => {
+        // 找一個以村里判定、照片沒去過的地點成就，補點補在它的第一個村里；座標故意放在一個沒去過、以半徑判定的地點上
+        const pv = achDefs.places.find(p => p.villages && !ach(base, p.id)?.done && !villSet(base).has(p.villages[0]));
+        const pr = achDefs.places.find(p => p.points && !ach(base, p.id)?.done);
+        if (!pv || !pr) return res(false, '找不到測試用的地點成就');
+        const code = pv.villages[0];
+        const m = manual.emptyManual();
+        m.items.push(manual.newItem({ target: manual.VILL_TARGET + code, label: code, lat: pr.points[0][0], lng: pr.points[0][1], area: false }, '2024-03-05'));
+        manual.refresh(m);
+        const s = await fog.compute(records(photos, m), 'visit');
+        const v = s.villages.find(x => x.code === code);
+        const t = s.towns.find(x => x.code === code.slice(0, 8));
+        const ok = m.records.kind[0] === 5 && !!v && v.first === Date.UTC(2024, 2, 5, 12) / 1000 && t.unlocked
+            && s.summary.village.unlocked === BASE.village[0] + 1 && !ach(s, pv.id).done && !ach(s, pr.id).done;
+        return res(ok, `kind ${m.records.kind[0]}、村里 ${v ? '解鎖' : '未解鎖'}、村里數 ${s.summary.village.unlocked}（應 ${BASE.village[0] + 1}）、`
+            + `${pv.name} ${ach(s, pv.id).done ? '誤解鎖' : '未解鎖'}、${pr.name} ${ach(s, pr.id).done ? '誤解鎖' : '未解鎖'}`);
     });
 
     // ---------- 節慶活動（新北撒旦城：年份集點卡） ----------
@@ -266,6 +292,14 @@ async function run() {
         const other = [...parsed.items, manual.newItem({ target: 'peaks_baiyue#2', label: '雪山', lat: 24.38, lng: 121.23 }, '2023-08-10')];
         const k0 = manual.mergeItems(m, parsed.items), k1 = manual.mergeItems(m, other);
         return res(same && k0 === 0 && k1 === 1 && m.items.length === 3, `往返相同 ${same}、重複匯入加 ${k0}、另一台多一筆加 ${k1}`);
+    });
+    await check('備份', '迷霧地圖補點（kind 5）匯出再匯入相同', async () => {
+        const m = manual.emptyManual();
+        m.items.push(manual.newItem({ target: manual.VILL_TARGET + '63000010001', label: '臺北市 松山區 莊敬里', lat: 25.05, lng: 121.56 }, '2024-03-05'));
+        manual.refresh(m);
+        const parsed = parseBackup(await exportBackup([m]).blob.text()).sources[0];
+        const same = JSON.stringify(parsed.items) === JSON.stringify(m.items) && parsed.records.kind.join() === '5';
+        return res(same, `往返相同 ${same}、kind ${parsed.records.kind.join()}`);
     });
     await check('備份', '不是備份檔時給清楚的錯誤', async () => {
         try { parseBackup('{"semanticSegments": []}'); return res(false, '沒有丟出錯誤'); }

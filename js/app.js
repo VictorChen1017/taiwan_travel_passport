@@ -139,7 +139,9 @@ async function compute({ show = true } = {}) {
         if (!app.explore) {
             app.explore = createExplore($('explore'), {
                 loadMap, loadDetail: id => app.fog.detail(id),
-                manual: { add: addManual, remove: removeManual, item: ref => app.manualSnapshot[ref] || null },
+                manual: { add: addManual, remove: removeManual, item: ref => app.manualSnapshot[ref] || null,
+                          // 迷霧地圖泡泡：target 開頭相同的手動紀錄（village:村里代碼 或 village:鄉鎮代碼）
+                          list: prefix => app.manualSnapshot.map((it, ref) => ({ ...it, ref })).filter(x => typeof x.target === 'string' && x.target.startsWith(prefix)) },
             });
         }
         app.explore.setData(stats);
@@ -376,7 +378,7 @@ function sourceSummary(s) {
         return {
             main: `<b>${n0(s.items.length)}</b> 個手動加入的地點`,
             detail: [st.from ? `期間：${range}` : '都沒有日期', noDate && st.from ? `${n0(noDate)} 筆沒有日期` : '',
-                '只在造訪模式計入；要刪除單筆請到該成就的明細', upd],
+                '只在造訪模式計入；要刪除單筆請到該成就的明細（迷霧地圖補的點在放大地圖點該區域）', upd],
         };
     }
     return { main: `<b>${n0(s.records.lat.length)}</b> 個點位`, detail: [`期間：${range}`, upd] };

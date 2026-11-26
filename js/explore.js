@@ -362,6 +362,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         svg.classList.toggle('fine', level === 'village');
         svg.innerHTML = `<g class="ex-fog">${parts.off.join('')}</g><g class="ex-clear">${parts.on.join('')}</g>`;
         svg._names = new Map(m.paths.map(p => [p.code, p.name]));
+        svg._paths = new Map(m.paths.map(p => [p.code, p]));
         svg._level = level;
         svg._color = useConquer(level) ? 'count' : 'year';
         return [y0, y1];
@@ -424,30 +425,105 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
 
     // 滑過顯示名稱與首次解鎖日期
     // 觸控時不用滑鼠事件（手指按下會補送 mousemove，雙指縮放時會誤選）；觸控的選取由放大彈窗的「單指點一下」處理
-    function bindHover(svg, tip, wrap) {
+    // interactive（放大彈窗）：點一下（滑鼠或觸控）把泡泡固定住，泡泡裡可以手動補點、刪除補的點（SPEC §15.5）
+    function bindHover(svg, tip, wrap, { interactive = false } = {}) {
         let touchAt = 0;
+        svg._pin = null;   // 固定住的泡泡：{ code, x, y }
         svg.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') touchAt = Date.now(); });
-        // 顯示某個區域的名稱與首次解鎖日期；el 為 null 時收起；同時標出選取的區域
-        svg._showTip = (el, cx, cy) => {
+        // 顯示某個區域的名稱與首次解鎖日期；el 為 null 時收起；同時標出選取的區域；pin：固定住（可操作補點）
+        svg._showTip = (el, cx, cy, pin = false) => {
             svg.querySelectorAll('path.sel').forEach(p => p.classList.remove('sel'));
             const code = el && el.dataset && el.dataset.code;
-            if (!code) { tip.hidden = true; return; }
+            if (!code) { tip.hidden = true; svg._pin = null; tip.classList.remove('pinned'); return; }
             const item = state.idx[svg._level].get(code);
             const on = item && (svg._level === 'village' || item.unlocked);
             const name = svg._names?.get(code) || code;
-            tip.innerHTML = `<b>${esc(name)}</b><br>${on ? `首次解鎖 ${fmtDate(item.first)}${item.n ? `<br>照片 ${fmtInt(item.n)} 張` : ''}` : '未解鎖'}`;
-            const r = wrap.getBoundingClientRect();
-            tip.style.left = Math.max(4, Math.min(cx - r.left + 14, r.width - 200)) + 'px';
-            tip.style.top = Math.max(4, Math.min(cy - r.top + 14, r.height - 50)) + 'px';
+            pin = pin && interactive;
+            svg._pin = pin ? { code, x: cx, y: cy } : null;
+            tip.classList.toggle('pinned', pin);
+            tip.innerHTML = `<b>${esc(name)}</b><br>${on ? `首次解鎖 ${fmtDate(item.first)}${item.n ? `<br>照片 ${fmtInt(item.n)} 張` : ''}` : '未解鎖'}`
+                + (pin ? tipManualHtml(svg, code) : '');
             tip.hidden = false;
-            if (TOUCH || Date.now() - touchAt < 1500) el.classList.add('sel');
+            placeTip(tip, wrap, cx, cy);
+            if (pin || TOUCH || Date.now() - touchAt < 1500) el.classList.add('sel');
         };
         svg.addEventListener('mousemove', e => {
-            if (Date.now() - touchAt < 1500) return;
+            if (Date.now() - touchAt < 1500 || svg._pin) return;
             if (svg._dragging) { tip.hidden = true; return; }
             svg._showTip(e.target, e.clientX, e.clientY);
         });
-        svg.addEventListener('mouseleave', () => { if (Date.now() - touchAt >= 1500) svg._showTip(null); });
+        svg.addEventListener('mouseleave', () => { if (Date.now() - touchAt >= 1500 && !svg._pin) svg._showTip(null); });
+        if (interactive) bindTipManual(svg, tip, wrap);
+    }
+
+    // 泡泡放在指標右下方；超出邊界時改放左邊或上方
+    function placeTip(tip, wrap, cx, cy) {
+        const r = wrap.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+        let x = cx - r.left + 14, y = cy - r.top + 14;
+        if (x + w > r.width - 4) x = Math.max(cx - r.left - 14 - w, r.width - 4 - w);
+        if (y + h > r.height - 4) y = cy - r.top - 14 - h;
+        tip.style.left = Math.max(4, x) + 'px';
+        tip.style.top = Math.max(4, y) + 'px';
+    }
+
+    // ---------- 迷霧地圖補點（手動紀錄 kind 5：記在村里代表點，只解鎖這個村里） ----------
+
+    const VILL_TARGET = 'village:';   // 同 js/manual.js
+    /** 點的區域 → 手動加入的資料；鄉鎮用「鄉鎮代表點所在的村里」 */
+    function mapAddInfo(svg, code) {
+        const p = svg._paths?.get(code);
+        if (!p || !p.c) return null;
+        if (svg._level === 'village') return { target: VILL_TARGET + code, label: p.name, lat: p.c[0], lng: p.c[1], area: false };
+        if (svg._level === 'town' && p.v) return { target: VILL_TARGET + p.v, label: `${p.name} ${p.vn || ''}`.trim(), lat: p.c[0], lng: p.c[1], area: false, town: true };
+        return null;
+    }
+
+    function tipManualHtml(svg, code) {
+        if (!manualApi || !manualApi.list) return '';
+        const info = mapAddInfo(svg, code);
+        if (!info) return '';
+        const mine = manualApi.list(VILL_TARGET + code);
+        const vname = it => (it.label || '').split(' ').pop();
+        const list = mine.length ? `<div class="ex-tip-list"><small>手動補的點</small>${mine.map(it =>
+            `<div class="ex-tip-item"><span>✋ ${Number.isFinite(it.time) ? fmtDate(it.time) : '沒有日期'}${svg._level === 'town' ? ' ' + esc(vname(it)) : ''}</span>
+                <button type="button" class="ex-mbtn" data-tdel="${it.ref}" title="刪除這筆補點">🗑</button></div>`).join('')}</div>` : '';
+        return `${list}<div class="ex-tip-act"><button type="button" class="ex-mbtn primary" data-tadd>✋ 我去過，手動加入</button></div>`;
+    }
+
+    function bindTipManual(svg, tip, wrap) {
+        tip.addEventListener('click', async e => {
+            const t = e.target.closest('button');
+            if (!t || !svg._pin) return;
+            const code = svg._pin.code, info = mapAddInfo(svg, code);
+            if (t.dataset.tadd !== undefined && info) {
+                t.closest('.ex-tip-act').innerHTML = `<div class="ex-tform">
+                    <label>造訪日期 <input type="date" max="${todayStr()}"></label>
+                    <div class="ex-tform-hint">日期可以不填。${info.town ? `記在鄉鎮中心所在的「${esc(info.label.split(' ').pop())}」；` : '記在村里中心；'}只解鎖這個村里，不會解鎖附近的景點、車站等成就。</div>
+                    <div class="ex-mform-msg" hidden></div>
+                    <div class="ex-mform-btns"><button type="button" class="ex-mbtn primary" data-tok>加入</button>
+                        <button type="button" class="ex-mbtn" data-tcancel>取消</button></div></div>`;
+                placeTip(tip, wrap, svg._pin.x, svg._pin.y);
+                tip.querySelector('input').focus();
+            } else if (t.dataset.tcancel !== undefined) {
+                svg._showTip(svg.querySelector(`path[data-code="${code}"]`), svg._pin.x, svg._pin.y, true);
+            } else if (t.dataset.tok !== undefined && info) {
+                const date = tip.querySelector('.ex-tform input').value;
+                const msg = tip.querySelector('.ex-mform-msg');
+                if (date && date > todayStr()) { msg.hidden = false; msg.textContent = '日期不能在未來'; return; }
+                tip.querySelectorAll('button').forEach(b => { b.disabled = true; });
+                const err = await manualApi.add(info, date);
+                if (err) {
+                    tip.querySelectorAll('button').forEach(b => { b.disabled = false; });
+                    msg.hidden = false; msg.textContent = err;
+                }
+                // 成功時重新計算 → setData 會重畫地圖並重新固定這個泡泡
+            } else if (t.dataset.tdel !== undefined) {
+                const it = manualApi.item(+t.dataset.tdel);
+                if (!it) return;
+                if (!confirm(`刪除這筆迷霧地圖補點？\n「${it.label}」（${Number.isFinite(it.time) ? fmtDate(it.time) : '沒有日期'}）`)) return;
+                await manualApi.remove(+t.dataset.tdel);
+            }
+        });
     }
 
     // ---------- 放大彈窗：滾輪縮放、拖曳平移 ----------
@@ -462,7 +538,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             <div class="ex-modal-box" role="dialog" aria-modal="true" aria-labelledby="ex-modal-title">
                 <div class="ex-modal-head">
                     <span id="ex-modal-title" class="ex-modal-title"></span>
-                    <span class="ex-modal-hint">${TOUCH ? '雙指縮放・拖曳移動・連點放大' : '滾輪縮放・拖曳移動・雙擊放大'}</span>
+                    <span class="ex-modal-hint">${TOUCH ? '雙指縮放・拖曳移動・連點放大・點區域可補點' : '滾輪縮放・拖曳移動・雙擊放大・點區域可補點'}</span>
                     <span class="ex-modal-regions" role="group" aria-label="地區">${Object.entries(REGIONS).map(([k, r]) =>
                         `<button type="button" data-region="${k}">${r.label}</button>`).join('')}</span>
                     <span class="ex-modal-tools">
@@ -484,7 +560,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
 
         const svg = modal.querySelector('svg');
         const body = modal.querySelector('.ex-modal-body');
-        bindHover(svg, modal.querySelector('.ex-tip'), body);
+        bindHover(svg, modal.querySelector('.ex-tip'), body, { interactive: true });
 
         const tip = modal.querySelector('.ex-tip');
         // 拖曳、縮放的邊界：全圖（台澎金馬外框）放大 1.5 倍；視窗比邊界小時不能拖出去，比邊界大時置中
@@ -587,8 +663,13 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 } else {
                     lastTap = { t: now, x: e.clientX, y: e.clientY };
                     const el = e.target, x = e.clientX, y = e.clientY;
-                    tapTimer = setTimeout(() => svg._showTip(el, x, y), 300);
+                    tapTimer = setTimeout(() => svg._showTip(el, x, y, true), 300);
                 }
+            } else if (e.type === 'pointerup' && e.pointerType === 'mouse' && e.button === 0 && drag && !drag.moved && !pinch) {
+                // 滑鼠點一下：固定泡泡（可補點）；點同一區或空白處收起
+                const hit = document.elementFromPoint(e.clientX, e.clientY), code = hit && svg.contains(hit) && hit.dataset ? hit.dataset.code : null;
+                if (code && svg._pin && svg._pin.code === code) svg._showTip(null);
+                else svg._showTip(code ? hit : null, e.clientX, e.clientY, true);
             }
             if (pts.size < 2) pinch = null;
             if (pts.size === 1) {
@@ -613,10 +694,12 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
     }
 
-    async function openModal() {
+    // keep：彈窗開著時資料更新（例如剛補點）：保留縮放位置，重新固定原本的泡泡
+    async function openModal(keep = false) {
         if (!modal) buildModal();
         const level = state.unit;
         const svg = modal.querySelector('svg');
+        const prev = keep && svg._level === level && svg._vb ? { vb: svg._vb, pin: svg._pin } : null;
         const loading = modal.querySelector('.ex-map-loading');
         modal.querySelector('.ex-modal-title').textContent = `迷霧地圖・${UNIT_LABEL[level]}`;
         modal.querySelector('.ex-tip').hidden = true;
@@ -626,9 +709,9 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             if (svg._color !== (useConquer(level) ? 'count' : 'year')) recolorModal();
             return;
         }
-        svg.innerHTML = '';
+        if (!prev) svg.innerHTML = '';
         modal.querySelector('.ex-modal-legend').innerHTML = '';
-        loading.hidden = false;
+        loading.hidden = !!prev;
         loading.textContent = level === 'village' ? '載入村里地圖中（約 240 KB）…' : '載入地圖中…';
         let m;
         try {
@@ -642,8 +725,11 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         svg._data = state.data;
         const [x, y, w, h] = m.viewBox.split(' ').map(Number);
         svg._base = { x, y, w, h };
-        svg._goRegion(DEFAULT_REGION);
+        if (prev) svg.setAttribute('viewBox', `${prev.vb.x} ${prev.vb.y} ${prev.vb.w} ${prev.vb.h}`);
+        else svg._goRegion(DEFAULT_REGION);
         modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1, level);
+        const el = prev && prev.pin && svg.querySelector(`path[data-code="${prev.pin.code}"]`);
+        if (el) svg._showTip(el, prev.pin.x, prev.pin.y, true);
     }
 
     // 放大彈窗換上色方式：重畫區域，保留目前的縮放位置
@@ -1175,7 +1261,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             if (!built) { render(); built = true; }
             renderBadges();
             update();
-            if (modal && !modal.hidden) openModal();
+            if (modal && !modal.hidden) openModal(true);
             // 明細開著（例如剛手動加入或刪除）：用新結果重開同一個明細
             if (dmodal && !dmodal.hidden && dmodal._id) {
                 const keepScroll = dmodal.querySelector('.ex-dmodal-body').scrollTop;

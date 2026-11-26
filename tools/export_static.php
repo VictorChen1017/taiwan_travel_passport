@@ -29,7 +29,8 @@ const CFG = __DIR__ . '/config';
 const MAP_ENV = 'ST_MakeEnvelope(118.1, 21.85, 122.2, 26.45, 4326)';
 const MAP_KX = 0.9135;
 const MAP_TOLERANCE = ['county' => 0.004, 'town' => 0.002, 'village' => 0.0018];
-const VILLAGE_SCALE = 1e5;    // 村里界線量化：1e-5 度 ≈ 1.1 公尺（不做幾何簡化）
+const VILLAGE_SIMPLIFY = 0.0001; // 判定用村里界：整層不留縫簡化，容許值約 10 公尺
+const VILLAGE_SCALE = 1e5;    // 村里界線量化：1e-5 度 ≈ 1.1 公尺
 const AREA_SIMPLIFY = 0.00001; // 保護區簡化容許值 ≈ 1 公尺（5 公尺時有 2 個範圍的判定和原專案不同）
 const AREA_SCALE = 1e5;
 
@@ -102,18 +103,43 @@ if ($want('maps')) {
             'town' => "SELECT towncode AS code, countyname || ' ' || townname AS name, geom FROM towns",
             'village' => "SELECT villcode AS code, countyname || ' ' || townname || ' ' || COALESCE(villname, '') AS name, geom FROM villages",
         ][$level];
+        // 不留縫的簡化：整層一起用 ST_CoverageSimplify（相鄰單位的共用邊只簡化一次，PostGIS 3.6 以上）
+        // 縣市層的來源（縣市界＋鄉鎮合併）先用 ST_CoverageClean 對齊；村里、鄉鎮在資料庫匯入時已清理過
+        // 每個單位留最大一塊，加上面積 > 2e-6 的小塊；更小的塊只在不與其他單位相接時（離島、沙洲）才丟掉，以免陸地上留洞
+        $clip = "ST_ClipByBox2D(geom, " . MAP_ENV . ")";
         $sql = "WITH src AS ($src),
-                g AS (SELECT code, name, ST_SimplifyPreserveTopology(ST_ClipByBox2D(geom, " . MAP_ENV . "), $tol) AS geom FROM src),
+                c AS (SELECT code, name, " . ($level === 'county' ? "ST_CoverageClean($clip, 0.0005, 0.000001, 'MERGE_LONGEST_BORDER') OVER ()" : $clip) . " AS geom FROM src),
+                g AS (SELECT code, name, ST_CoverageSimplify(geom, $tol) OVER () AS geom FROM c),
                 p AS (SELECT code, name, (ST_Dump(geom)).geom AS part FROM g),
                 r AS (SELECT code, name, part, ROW_NUMBER() OVER (PARTITION BY code ORDER BY ST_Area(part) DESC) AS rn
                       FROM p WHERE ST_GeometryType(part) = 'ST_Polygon')
                 SELECT code, name, ST_AsSVG(ST_Scale(ST_Collect(part), " . MAP_KX . ", 1), 1, 3) AS d
                 FROM r WHERE rn = 1 OR ST_Area(part) > 2e-6
+                   OR EXISTS (SELECT 1 FROM g WHERE g.code <> r.code AND g.geom && r.part AND ST_Intersects(g.geom, r.part))
                 GROUP BY code, name ORDER BY code";
+        // 迷霧地圖補點（SPEC §15.5）：c＝代表點 [緯度, 經度]（未簡化界線的 ST_PointOnSurface，保證在面內）；
+        // 鄉鎮另給 v、vn＝代表點所在的村里代碼與名稱（落在沒有名稱的村里時改用該鄉鎮面積最大、有名稱的村里，並以那個村里的代表點為 c）
+        $centers = [];
+        if ($level === 'village') {
+            foreach ($pg->query('SELECT villcode AS code, ST_Y(p) AS lat, ST_X(p) AS lng FROM (SELECT villcode, ST_PointOnSurface(geom) AS p FROM villages) s') as $r)
+                $centers[$r['code']] = ['c' => [round((float)$r['lat'], 6), round((float)$r['lng'], 6)]];
+        } elseif ($level === 'town') {
+            $csql = "WITH t AS (SELECT towncode, ST_PointOnSurface(geom) AS p FROM towns),
+                     hit AS (SELECT DISTINCT ON (t.towncode) t.towncode, v.villcode, v.villname, t.p FROM t
+                             JOIN villages v ON v.towncode = t.towncode AND COALESCE(v.villname, '') <> '' AND ST_Covers(v.geom, t.p)
+                             ORDER BY t.towncode, v.villcode),
+                     big AS (SELECT DISTINCT ON (towncode) towncode, villcode, villname, ST_PointOnSurface(geom) AS p FROM villages
+                             WHERE COALESCE(villname, '') <> '' ORDER BY towncode, ST_Area(geom) DESC)
+                     SELECT t.towncode AS code, COALESCE(h.villcode, b.villcode) AS v, COALESCE(h.villname, b.villname) AS vn,
+                            ST_Y(COALESCE(h.p, b.p)) AS lat, ST_X(COALESCE(h.p, b.p)) AS lng
+                     FROM t LEFT JOIN hit h USING (towncode) LEFT JOIN big b USING (towncode)";
+            foreach ($pg->query($csql) as $r) if ($r['v'])
+                $centers[$r['code']] = ['c' => [round((float)$r['lat'], 6), round((float)$r['lng'], 6)], 'v' => $r['v'], 'vn' => $r['vn']];
+        }
         $paths = [];
         foreach ($pg->query($sql) as $r) {
             if ($r['d'] === '' || $r['d'] === null) continue;
-            $paths[] = ['code' => $r['code'], 'name' => $r['name'], 'd' => $r['d']];
+            $paths[] = ['code' => $r['code'], 'name' => $r['name'], 'd' => $r['d']] + ($centers[$r['code']] ?? []);
         }
         $ext = $pg->query("SELECT ST_XMin(e) x0, ST_XMax(e) x1, ST_YMin(e) y0, ST_YMax(e) y1
                            FROM (SELECT ST_Extent(ST_ClipByBox2D(geom, " . MAP_ENV . ")) e FROM towns) t")->fetch();
@@ -126,13 +152,13 @@ if ($want('maps')) {
 }
 
 // ======================================================================
-// villages.topo.json：村里界線（判定照片所屬村里用；只量化、不簡化）
+// villages.topo.json：村里界線（判定照片所屬村里用；整層不留縫簡化約 10 公尺後量化）
 // ======================================================================
 
 if ($want('villages')) {
     echo "villages\n";
     $geoms = [];
-    foreach ($pg->query('SELECT villcode, ST_AsGeoJSON(geom, 7) AS g FROM villages ORDER BY villcode') as $r) {
+    foreach ($pg->query('SELECT villcode, ST_AsGeoJSON(ST_CoverageSimplify(geom, ' . VILLAGE_SIMPLIFY . ') OVER (), 7) AS g FROM villages ORDER BY villcode') as $r) {
         $geoms[$r['villcode']] = json_decode($r['g'], true);
     }
     $topo = topo_encode($geoms, 'villages', VILLAGE_SCALE);

@@ -1903,3 +1903,64 @@ body.ex-modal-open {
 @media (prefers-reduced-motion: reduce) {
     .ex-fest-svg [class^="xm-tw"] { animation: none; }
 }
+
+/* 迷霧地圖補點：放大彈窗裡點一下固定住的泡泡（可操作） */
+.ex-tip.pinned {
+    max-width: 260px;
+    color: var(--c-text);
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-accent);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+    pointer-events: auto;
+}
+
+.ex-tip-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.ex-tip-list small {
+    color: var(--c-text-muted);
+}
+
+.ex-tip-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.ex-tip-item .ex-mbtn {
+    padding: 1px 6px;
+}
+
+.ex-tip-act {
+    margin-top: 8px;
+}
+
+.ex-tform {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ex-tform input[type="date"] {
+    margin-left: 6px;
+    padding: 2px 4px;
+    font: inherit;
+    color: var(--c-text);
+    background: var(--c-surface-3);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 6px;
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] .ex-tform input[type="date"] {
+    color-scheme: dark;
+}
+
+.ex-tform-hint {
+    color: var(--c-text-muted);
+}

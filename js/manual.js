@@ -2,7 +2,8 @@
 //
 // 只有一個來源：{ id: 'manual', type: 'manual', name: '手動紀錄', added, updated, items, records }
 // items：[{ id, target, label, lat, lng, time, area, added }]
-//   target：地點成就 id，或集點卡的「卡片 id#格子編號」（例如 peaks_baiyue#1）
+//   target：地點成就 id，或集點卡的「卡片 id#格子編號」（例如 peaks_baiyue#1），
+//           或迷霧地圖補點的「village:村里代碼」（kind 5：座標是村里代表點，只解鎖這個村里）
 //   time  ：日期中午 12:00（當地時鐘時間當 UTC 的秒數）；沒填日期為 null
 //   area  ：以範圍判定的地點（國家公園、離島、保護區）→ kind 4，座標只是代表點，不解鎖村里
 // records 由 items 產生（kind 3／4），參與計算時和其他來源一樣；只在造訪模式計入
@@ -11,6 +12,8 @@
 import { newId } from './store.js';
 
 export const MANUAL_ID = 'manual';
+export const VILL_TARGET = 'village:';   // 迷霧地圖補點的 target 前綴（同 js/core/compute.js）
+export const isVillTarget = target => typeof target === 'string' && target.startsWith(VILL_TARGET);
 
 export function emptyManual() {
     const now = Date.now();
@@ -24,7 +27,7 @@ export function buildRecords(items) {
     items.forEach((it, i) => {
         r.lat[i] = it.lat; r.lng[i] = it.lng;
         r.time[i] = Number.isFinite(it.time) ? it.time : NaN;
-        r.kind[i] = it.area ? 4 : 3;
+        r.kind[i] = it.area ? 4 : isVillTarget(it.target) ? 5 : 3;
     });
     return r;
 }

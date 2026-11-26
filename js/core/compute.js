@@ -11,6 +11,7 @@ import { PolygonIndex, PointIndex, toGeoJSON } from './geo.js';
 // 台灣範圍（含東沙、太平島）；範圍外的紀錄不參與任何計算
 const BOUNDS = { lng0: 114, lng1: 124.7, lat0: 10, lat1: 26.5 };
 const DAY = 86400;
+const VILL_TARGET = 'village:';   // kind 5（迷霧地圖補點）的 targets 前綴，同 js/manual.js
 const SIX = ['63000', '64000', '65000', '66000', '67000', '68000'];
 
 const pad = n => String(n).padStart(2, '0');
@@ -54,8 +55,10 @@ export function prepareStatic(d) {
 /**
  * @param R     紀錄 { lat: Float64Array, lng: Float64Array, time: Float64Array（NaN＝不明），
  *              kind?: Uint8Array（3 手動紀錄、4 以範圍判定地點的手動紀錄）, ref?: Int32Array（手動紀錄編號，其他 -1）,
- *              targets?: string[]（手動紀錄編號 → 地點成就 id，kind 4 用）}
+ *              targets?: string[]（手動紀錄編號 → 地點成就 id，kind 4 用；kind 5 為 'village:村里代碼'）}
  *              kind 4 的座標只是代表點：不參與村里、半徑、保護區判定，只讓 targets 指定的地點成就解鎖
+ *              kind 5（迷霧地圖補點）的座標也只是代表點：依 targets 的村里代碼解鎖該村里（連帶鄉鎮、縣市、旅行類），
+ *              不參與半徑、保護區、以村里判定的地點成就
  * @param S     prepareStatic() 的結果
  * @param opts  { mode: 'photo' | 'visit', now: 未來時間上限（unix 秒，預設 現在 + 14 小時） }
  * @returns     { stats, ctx }：stats 為統計＋成就（格式同原專案 type=stats，去掉照片數）；ctx 供 detail() 使用
@@ -81,6 +84,12 @@ export function compute(R, S, opts = {}) {
             if (tg) { if (!manualPlace.has(tg)) manualPlace.set(tg, []); manualPlace.get(tg).push(i); }
             continue;
         }
+        if (K && K[i] === 5) {
+            const tg = R.targets && REF ? R.targets[REF[i]] : null;
+            const v = tg && tg.startsWith(VILL_TARGET) ? S.villIdx.get(tg.slice(VILL_TARGET.length)) : undefined;
+            vill[i] = v === undefined ? -1 : v;
+            continue;
+        }
         const la = R.lat[i], lo = R.lng[i];
         if (!(la >= BOUNDS.lat0 && la <= BOUNDS.lat1 && lo >= BOUNDS.lng0 && lo <= BOUNDS.lng1)) continue;
         inBounds[i] = 1;
@@ -101,12 +110,17 @@ export function compute(R, S, opts = {}) {
     const nv = S.vills.length, nt = S.towns.length;
     const villN = new Int32Array(nv), villFirst = new Array(nv).fill(null);
     const townN = new Int32Array(nt), townFirst = new Array(nt).fill(null);
+    // 以村里判定的地點成就用：不含 kind 5（迷霧地圖補點只解鎖村里本身）
+    const villPN = new Int32Array(nv), villPFirst = new Array(nv).fill(null);
     for (let i = 0; i < n; i++) {
         const v = vill[i];
         if (v < 0) continue;
         const t = T(i), ti = S.vills[v].ti;
         villN[v]++; townN[ti]++;
         if (t !== null) { villFirst[v] = minNull(villFirst[v], t); townFirst[ti] = minNull(townFirst[ti], t); }
+        if (K && K[i] === 5) continue;
+        villPN[v]++;
+        if (t !== null) villPFirst[v] = minNull(villPFirst[v], t);
     }
 
     const villages = [];
@@ -288,7 +302,7 @@ export function compute(R, S, opts = {}) {
             for (const code of p.villages) {
                 const v = S.villIdx.get(code);
                 if (v === undefined) continue;
-                cnt += villN[v]; first = minNull(first, villFirst[v]);
+                cnt += villPN[v]; first = minNull(first, villPFirst[v]);
             }
         } else if (p.areas) {
             for (const code of p.areas) {
@@ -660,7 +674,7 @@ function placeRecords(ctx, p) {
         for (const [la, lo] of p.points) pts.around(la, lo, p.radius, i => { if (!seen.has(i)) { seen.add(i); out.push(i); } });
     } else if (p.villages) {
         const want = new Set(p.villages.map(c => S.villIdx.get(c)));
-        for (let i = 0; i < vill.length; i++) if (vill[i] >= 0 && want.has(vill[i])) out.push(i);
+        for (let i = 0; i < vill.length; i++) if (vill[i] >= 0 && want.has(vill[i]) && !(ctx.K && ctx.K[i] === 5)) out.push(i);
     } else if (p.areas && S.areaIndex) {
         const want = new Set(p.areas.map(c => S.areaPos.get(c)));
         for (let i = 0; i < R.lat.length; i++) {
@@ -674,7 +688,7 @@ function placeRecords(ctx, p) {
     return out;
 }
 
-const isManual = (ctx, i) => !!ctx.K && (ctx.K[i] === 3 || ctx.K[i] === 4) && !!ctx.REF && ctx.REF[i] >= 0;
+const isManual = (ctx, i) => !!ctx.K && ctx.K[i] >= 3 && ctx.K[i] <= 5 && !!ctx.REF && ctx.REF[i] >= 0;
 
 /** 一個或多個點半徑內的紀錄，分成手動紀錄與其他 */
 function splitManual(ctx, points, r) {

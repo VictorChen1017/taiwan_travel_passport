@@ -21,7 +21,7 @@
 //   ]
 // }
 // time：當地時鐘時間當成 UTC 的 unix 秒（docs/SPEC.md §5），不明為 null
-// kind：0 照片、1 停留點、2 移動途中、3 手動紀錄、4 以範圍判定地點的手動紀錄（座標為代表點）
+// kind：0 照片、1 停留點、2 移動途中、3 手動紀錄、4 以範圍判定地點的手動紀錄（座標為代表點）、5 迷霧地圖補點（座標為村里代表點，對象 village:村里代碼）
 // 手動紀錄（type "manual"）的每一行多四個欄位：[緯度, 經度, 時間, 類型, 編號, 對象, 名稱, 加入時間]，匯入時以編號逐筆合併
 // 座標原樣保存（不四捨五入），來回匯出匯入後計算結果完全相同
 
@@ -100,7 +100,7 @@ export function parseBackup(text) {
         let bad = 0, o = 0;
         for (const r of s.records) {
             const [la, lo, t, k, mid, target, label, added] = Array.isArray(r) ? r : [];
-            if (!(Math.abs(la) <= 90 && Math.abs(lo) <= 180) || !(k >= 0 && k <= 4)) { bad++; continue; }
+            if (!(Math.abs(la) <= 90 && Math.abs(lo) <= 180) || !(k >= 0 && k <= 5)) { bad++; continue; }
             if (manual) {
                 if (typeof mid !== 'string' || !mid || typeof target !== 'string') { bad++; continue; }
                 items.push({ id: mid, target, label: String(label || ''), lat: la, lng: lo, time: t == null ? null : +t, area: k === 4, added: +added || 0 });
