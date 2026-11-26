@@ -62,6 +62,7 @@
     --c-map-bg: #dde3e8;          /* 地圖、小地圖載入前的底色 */
     --c-fog: #cdd3da;             /* 迷霧地圖未解鎖區域 */
     --c-fog-line: #ffffff;        /* 迷霧地圖界線 */
+    --c-map-coast: #4b6584;       /* 迷霧地圖海岸線（加粗描邊） */
     --c-badge-off: #cdd3da;       /* 未達成的徽章 */
     --c-badge-off-ring: #b7bec7;
     --c-map-trail: #2c3e66;       /* 地圖上較早的足跡點、軌跡線 */
@@ -119,6 +120,7 @@
     --c-map-bg: #1b2229;
     --c-fog: #3a4552;
     --c-fog-line: #171d24;
+    --c-map-coast: #8ea9c8;
     --c-badge-off: #3a4552;
     --c-badge-off-ring: #4a5663;
     --c-map-trail: #a5b8dc;

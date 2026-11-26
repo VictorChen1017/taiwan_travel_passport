@@ -186,7 +186,7 @@
     position: relative;
     flex: 1;
     min-height: 420px;
-    background: var(--c-surface-3);
+    background: var(--c-sidebar-bg);   /* 地圖底色（海）同側邊欄的淺藍 */
     border-radius: 8px;
     overflow: hidden;
     cursor: zoom-in;
@@ -270,17 +270,44 @@
     fill-opacity: 0.75;
 }
 
-/* 滑鼠滑過才描邊；觸控裝置沒有 hover，改用單指點一下的 .sel（js/explore.js） */
-@media (hover: hover) {
-    .ex-map path:hover {
-        stroke: var(--ex-text);
-        stroke-width: 1.5px;
-    }
+/* 海岸線：同一層區域的聯集，加粗描邊 */
+.ex-map path.ex-coast {
+    fill: none;
+    stroke: var(--c-map-coast);
+    stroke-width: 1.4px;
+    pointer-events: none;
 }
 
-.ex-map path.sel {
+.ex-map.fine path.ex-coast {
+    stroke-width: 1.1px;
+}
+
+/* 滑過／點選的外框：畫在疊在地圖上的另一張 SVG（js/explore.js setHl），不會被鄰居蓋住、也不用重畫整張地圖 */
+.ex-map-hl {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.ex-map-hl path {
+    fill: none;
     stroke: var(--ex-text);
-    stroke-width: 1.5px;
+    stroke-width: 2px;
+    vector-effect: non-scaling-stroke;
+    stroke-linejoin: round;
+}
+
+/* 放大彈窗拖曳、雙指縮放時用 transform 移動地圖（放開才重畫） */
+.ex-modal-map,
+.ex-modal .ex-map-hl {
+    transform-origin: 0 0;
+}
+
+.ex-modal-map.dragging,
+.ex-modal-map.dragging + .ex-map-hl {
+    will-change: transform;
 }
 
 .ex-map-loading {
@@ -1341,7 +1368,7 @@ body.ex-modal-open {
     position: relative;
     flex: 1;
     min-height: 0;
-    background: var(--c-surface-3);
+    background: var(--c-sidebar-bg);
     border-radius: 8px;
     overflow: hidden;
 }
@@ -1369,13 +1396,7 @@ body.ex-modal-open {
     fill-opacity: 0.75;
 }
 
-@media (hover: hover) {
-    .ex-modal .ex-map path:hover {
-        stroke: var(--c-text);
-    }
-}
-
-.ex-modal .ex-map path.sel {
+.ex-modal .ex-map-hl path {
     stroke: var(--c-text);
 }
 

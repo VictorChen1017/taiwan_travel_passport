@@ -107,16 +107,18 @@ if ($want('maps')) {
         // 縣市層的來源（縣市界＋鄉鎮合併）先用 ST_CoverageClean 對齊；村里、鄉鎮在資料庫匯入時已清理過
         // 每個單位留最大一塊，加上面積 > 2e-6 的小塊；更小的塊只在不與其他單位相接時（離島、沙洲）才丟掉，以免陸地上留洞
         $clip = "ST_ClipByBox2D(geom, " . MAP_ENV . ")";
-        $sql = "WITH src AS ($src),
+        $with = "WITH src AS ($src),
                 c AS (SELECT code, name, " . ($level === 'county' ? "ST_CoverageClean($clip, 0.0005, 0.000001, 'MERGE_LONGEST_BORDER') OVER ()" : $clip) . " AS geom FROM src),
                 g AS (SELECT code, name, ST_CoverageSimplify(geom, $tol) OVER () AS geom FROM c),
                 p AS (SELECT code, name, (ST_Dump(geom)).geom AS part FROM g),
                 r AS (SELECT code, name, part, ROW_NUMBER() OVER (PARTITION BY code ORDER BY ST_Area(part) DESC) AS rn
-                      FROM p WHERE ST_GeometryType(part) = 'ST_Polygon')
-                SELECT code, name, ST_AsSVG(ST_Scale(ST_Collect(part), " . MAP_KX . ", 1), 1, 3) AS d
-                FROM r WHERE rn = 1 OR ST_Area(part) > 2e-6
-                   OR EXISTS (SELECT 1 FROM g WHERE g.code <> r.code AND g.geom && r.part AND ST_Intersects(g.geom, r.part))
-                GROUP BY code, name ORDER BY code";
+                      FROM p WHERE ST_GeometryType(part) = 'ST_Polygon'),
+                k AS (SELECT code, name, part FROM r WHERE rn = 1 OR ST_Area(part) > 2e-6
+                      OR EXISTS (SELECT 1 FROM g WHERE g.code <> r.code AND g.geom && r.part AND ST_Intersects(g.geom, r.part)))";
+        $sql = "$with SELECT code, name, ST_AsSVG(ST_Scale(ST_Collect(part), " . MAP_KX . ", 1), 1, 3) AS d
+                FROM k GROUP BY code, name ORDER BY code";
+        // 海岸線（加粗描邊用）：同一層簡化後的區域聯集，和區域界線完全對齊
+        $coast = $pg->query("$with SELECT ST_AsSVG(ST_Scale(ST_CoverageUnion(part), " . MAP_KX . ", 1), 1, 3) FROM k")->fetchColumn();
         // 迷霧地圖補點（SPEC §15.5）：c＝代表點 [緯度, 經度]（未簡化界線的 ST_PointOnSurface，保證在面內）；
         // 鄉鎮另給 v、vn＝代表點所在的村里代碼與名稱（落在沒有名稱的村里時改用該鄉鎮面積最大、有名稱的村里，並以那個村里的代表點為 c）
         $centers = [];
@@ -147,7 +149,7 @@ if ($want('maps')) {
         $viewBox = sprintf('%.3f %.3f %.3f %.3f',
             ($ext['x0'] - $pad) * MAP_KX, -($ext['y1'] + $pad),
             ($ext['x1'] - $ext['x0'] + 2 * $pad) * MAP_KX, $ext['y1'] - $ext['y0'] + 2 * $pad);
-        write_json("map_$level.json", ['level' => $level, 'viewBox' => $viewBox, 'paths' => $paths]);
+        write_json("map_$level.json", ['level' => $level, 'viewBox' => $viewBox, 'coast' => $coast, 'paths' => $paths]);
     }
 }
 

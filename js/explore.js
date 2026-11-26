@@ -349,7 +349,6 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const firsts = [...idx.values()].map(x => x.first).filter(Boolean).map(t => new Date(t * 1000).getUTCFullYear());
         const y1 = firsts.length ? Math.max(...firsts) : new Date().getUTCFullYear();
         const y0 = firsts.length ? Math.min(y1, Math.max(EARLY_YEAR, Math.min(...firsts))) : y1;
-        // 已解鎖的畫在後面，滑過時的外框才不會被遮住
         const parts = { off: [], on: [] };
         for (const p of m.paths) {
             const item = idx.get(p.code);
@@ -358,9 +357,12 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 : item.first ? yearColor(new Date(item.first * 1000).getUTCFullYear(), y0, y1) : '#ffcfb5';
             parts[on ? 'on' : 'off'].push(`<path d="${p.d}" data-code="${p.code}" class="${on ? 'on' : 'off'}"${fill ? ` style="fill:${fill}"` : ''}/>`);
         }
-        svg.setAttribute('viewBox', m.viewBox);
+        setViewBox(svg, m.viewBox);
         svg.classList.toggle('fine', level === 'village');
-        svg.innerHTML = `<g class="ex-fog">${parts.off.join('')}</g><g class="ex-clear">${parts.on.join('')}</g>`;
+        // 海岸線：同一層區域的聯集（data/map_*.json 的 coast），畫在最上面加粗描邊
+        svg.innerHTML = `<g class="ex-fog">${parts.off.join('')}</g><g class="ex-clear">${parts.on.join('')}</g>`
+            + (m.coast ? `<path class="ex-coast" d="${m.coast}"/>` : '');
+        setHl(svg, null);
         svg._names = new Map(m.paths.map(p => [p.code, p.name]));
         svg._paths = new Map(m.paths.map(p => [p.code, p]));
         svg._level = level;
@@ -423,6 +425,33 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         root.querySelector('#ex-legend').innerHTML = legendHtml(y0, y1, level);
     }
 
+    // ---------- 選取外框疊層、視窗 ----------
+    // 滑過／選取的外框畫在疊在地圖上的另一張小 SVG（ex-map-hl）：
+    // 外框不會被後畫的鄰居蓋住一半（顏色不均），也不用重畫整張大地圖（iOS 村里地圖局部重畫會漏畫成破圖）
+    function hlOf(svg) {
+        if (!svg._hl) {
+            svg._hl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg._hl.setAttribute('class', 'ex-map-hl');
+            svg._hl.setAttribute('aria-hidden', 'true');
+            svg._hl.setAttribute('preserveAspectRatio', svg.getAttribute('preserveAspectRatio') || 'xMidYMid meet');
+            const vb = svg.getAttribute('viewBox');
+            if (vb) svg._hl.setAttribute('viewBox', vb);
+            svg.after(svg._hl);
+        }
+        return svg._hl;
+    }
+    function setHl(svg, el) {
+        const code = el && el.dataset ? el.dataset.code : null;
+        if ((svg._hlCode || null) === code) return;
+        svg._hlCode = code;
+        hlOf(svg).innerHTML = code ? `<path d="${el.getAttribute('d')}"/>` : '';
+    }
+    /** 地圖與外框疊層一起換 viewBox */
+    function setViewBox(svg, vb) {
+        svg.setAttribute('viewBox', vb);
+        hlOf(svg).setAttribute('viewBox', vb);
+    }
+
     // 滑過顯示名稱與首次解鎖日期
     // 觸控時不用滑鼠事件（手指按下會補送 mousemove，雙指縮放時會誤選）；觸控的選取由放大彈窗的「單指點一下」處理
     // interactive（放大彈窗）：點一下（滑鼠或觸控）把泡泡固定住，泡泡裡可以手動補點、刪除補的點（SPEC §15.5）
@@ -432,9 +461,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         svg.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') touchAt = Date.now(); });
         // 顯示某個區域的名稱與首次解鎖日期；el 為 null 時收起；同時標出選取的區域；pin：固定住（可操作補點）
         svg._showTip = (el, cx, cy, pin = false) => {
-            svg.querySelectorAll('path.sel').forEach(p => p.classList.remove('sel'));
             const code = el && el.dataset && el.dataset.code;
-            if (!code) { tip.hidden = true; svg._pin = null; tip.classList.remove('pinned'); return; }
+            if (!code) { setHl(svg, null); tip.hidden = true; svg._pin = null; tip.classList.remove('pinned'); return; }
             const item = state.idx[svg._level].get(code);
             const on = item && (svg._level === 'village' || item.unlocked);
             const name = svg._names?.get(code) || code;
@@ -445,7 +473,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 + (pin ? tipManualHtml(svg, code) : '');
             tip.hidden = false;
             placeTip(tip, wrap, cx, cy);
-            if (pin || TOUCH || Date.now() - touchAt < 1500) el.classList.add('sel');
+            setHl(svg, el);
         };
         svg.addEventListener('mousemove', e => {
             if (Date.now() - touchAt < 1500 || svg._pin) return;
@@ -571,10 +599,35 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             const fit1 = (pos, len, lo, span) => len >= span ? lo + (span - len) / 2 : Math.min(lo + span - len, Math.max(lo, pos));
             return { ...v, x: fit1(v.x, v.w, B.x, B.w), y: fit1(v.y, v.h, B.y, B.h) };
         };
-        const setVb = v => { v = clampVb(v); svg._vb = v; svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`); };
+        // 視窗：svg._vb 是目前的視窗；shown 是實際畫在 viewBox 上的視窗
+        // 拖曳、雙指縮放時只用 CSS transform 移動、縮放已畫好的地圖（不重畫），放開才改 viewBox 重畫一次（iOS 才順）
+        let shown = null, raf = 0;
+        const setXf = t => { svg.style.transform = t; hlOf(svg).style.transform = t; };
+        const draw = v => {
+            cancelAnimationFrame(raf); raf = 0;
+            shown = v;
+            setViewBox(svg, `${v.x} ${v.y} ${v.w} ${v.h}`);
+            setXf('');
+        };
+        const setVb = v => { v = clampVb(v); svg._vb = v; draw(v); };
+        const liveVb = v => {
+            svg._vb = clampVb(v);
+            if (!shown) { draw(svg._vb); return; }
+            if (raf) return;
+            raf = requestAnimationFrame(() => {
+                raf = 0;
+                // shown 畫出來的點 X0 → 新視窗下的位置 X1 = k·X0 + t
+                const a = fit(shown), b = fit(svg._vb), k = a.s / b.s;
+                const tx = b.ox - a.ox * k + (shown.x - svg._vb.x) / b.s, ty = b.oy - a.oy * k + (shown.y - svg._vb.y) / b.s;
+                setXf(`translate(${tx}px, ${ty}px) scale(${k})`);
+            });
+        };
+        const commitVb = () => { if (svg._vb && (raf || svg.style.transform)) draw(svg._vb); };
+        svg._draw = draw;
         // 螢幕座標 → 地圖座標（preserveAspectRatio=meet：取較大的縮放比，並扣掉置中留白）
+        // 用外框（地圖填滿它）量大小：手勢中地圖本身有 transform，量到的會不準
         const fit = v => {
-            const r = svg.getBoundingClientRect();
+            const r = body.getBoundingClientRect();
             const s = Math.max(v.w / r.width, v.h / r.height);
             return { r, s, ox: (r.width - v.w / s) / 2, oy: (r.height - v.h / s) / 2 };
         };
@@ -597,7 +650,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const zoom = (factor, cx, cy) => {
             svg._showTip(null);
             const v = svg._vb;
-            if (cx === undefined) { const r = svg.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+            if (cx === undefined) { const r = body.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
             setVb(placeAt(toSvg(cx, cy), cx, cy, v.w / factor, v));
         };
         const goRegion = k => {
@@ -637,8 +690,9 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             if (pinch && pts.size >= 2) {
                 // 兩指中點下的地圖點跟著手指走，同時依兩指距離縮放
                 const m = mid();
-                setVb(placeAt(pinch.p, m.x, m.y, pinch.vb.w * pinch.d / m.d, pinch.vb));
+                liveVb(placeAt(pinch.p, m.x, m.y, pinch.vb.w * pinch.d / m.d, pinch.vb));
                 svg._dragging = true;
+                svg.classList.add('dragging');
                 return;
             }
             if (!drag) return;
@@ -648,7 +702,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             unselect();
             svg.classList.add('dragging');
             const { s } = toSvg(0, 0, drag.vb);
-            setVb({ ...drag.vb, x: drag.vb.x - dx * s, y: drag.vb.y - dy * s });
+            liveVb({ ...drag.vb, x: drag.vb.x - dx * s, y: drag.vb.y - dy * s });
         });
         const endPointer = e => {
             pts.delete(e.pointerId);
@@ -678,7 +732,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 drag = { x: p.x, y: p.y, vb: { ...svg._vb }, moved: true };
                 return;
             }
-            if (!pts.size) { drag = null; svg._dragging = false; svg.classList.remove('dragging'); }
+            if (!pts.size) { drag = null; svg._dragging = false; svg.classList.remove('dragging'); commitVb(); }
         };
         svg.addEventListener('pointerup', endPointer);
         svg.addEventListener('pointercancel', endPointer);
@@ -725,7 +779,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         svg._data = state.data;
         const [x, y, w, h] = m.viewBox.split(' ').map(Number);
         svg._base = { x, y, w, h };
-        if (prev) svg.setAttribute('viewBox', `${prev.vb.x} ${prev.vb.y} ${prev.vb.w} ${prev.vb.h}`);
+        if (prev) { svg._vb = prev.vb; svg._draw(prev.vb); }
         else svg._goRegion(DEFAULT_REGION);
         modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1, level);
         const el = prev && prev.pin && svg.querySelector(`path[data-code="${prev.pin.code}"]`);
@@ -738,7 +792,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (!level) return;
         const m = await getMap(level);
         const [y0, y1] = drawMap(svg, m, level);
-        if (vb) svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+        if (vb) svg._draw(vb);
         modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1, level);
     }
 
