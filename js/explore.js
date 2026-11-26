@@ -343,39 +343,27 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         return state.maps[level];
     }
 
-    /** 把某層級的迷霧地圖畫進 svg；回傳 [y0, y1]（上色的年份範圍） */
+    /**
+     * 把某層級的迷霧地圖畫進 svg；回傳 [y0, y1]（上色的年份範圍）
+     * 區域一律畫在 canvas（paintCanvas）：村里約 8,000 個 SVG 節點在 iOS 重畫、拖曳都很慢甚至卡住，縣市、鄉鎮也統一用同一套畫法
+     * svg 本身是空的，只負責接收觸控、滑鼠，並提供視窗（viewBox）給 canvas 與外框疊層
+     */
     function drawMap(svg, m, level) {
         const idx = state.idx[level];
         const firsts = [...idx.values()].map(x => x.first).filter(Boolean).map(t => new Date(t * 1000).getUTCFullYear());
         const y1 = firsts.length ? Math.max(...firsts) : new Date().getUTCFullYear();
         const y0 = firsts.length ? Math.min(y1, Math.max(EARLY_YEAR, Math.min(...firsts))) : y1;
-        const parts = { off: [], on: [] };
+        const fills = new Map();   // 已解鎖的區域 → 顏色；沒有的是迷霧
         for (const p of m.paths) {
             const item = idx.get(p.code);
-            const on = item && (level === 'village' || item.unlocked);
-            const fill = !on ? null : useConquer(level) ? conquerColor(item.n || 0) || '#ffcfb5'
-                : item.first ? yearColor(new Date(item.first * 1000).getUTCFullYear(), y0, y1) : '#ffcfb5';
-            parts[on ? 'on' : 'off'].push(`<path d="${p.d}" data-code="${p.code}" class="${on ? 'on' : 'off'}"${fill ? ` style="fill:${fill}"` : ''}/>`);
+            if (!item || !(level === 'village' || item.unlocked)) continue;
+            fills.set(p.code, useConquer(level) ? conquerColor(item.n || 0) || '#ffcfb5'
+                : item.first ? yearColor(new Date(item.first * 1000).getUTCFullYear(), y0, y1) : '#ffcfb5');
         }
-        // 放大彈窗的村里層（約 8,000 個區域）畫在 canvas：SVG 節點太多，iOS 重畫、拖曳都很慢，甚至卡住
-        // 這時 svg 是空的，只負責接收觸控、滑鼠，並提供視窗（viewBox）給 canvas 與外框疊層
-        const useCanvas = level === 'village' && svg.classList.contains('ex-modal-map');
-        if (useCanvas) {
-            const fills = new Map();
-            for (const p of m.paths) {
-                const item = idx.get(p.code);
-                if (item) fills.set(p.code, useConquer(level) ? conquerColor(item.n || 0) || '#ffcfb5'
-                    : item.first ? yearColor(new Date(item.first * 1000).getUTCFullYear(), y0, y1) : '#ffcfb5');
-            }
-            svg._cv = { ...canvasData(m), fills };
-        } else svg._cv = null;
-        if (svg._canvas) svg._canvas.hidden = !useCanvas;
-        setViewBox(svg, m.viewBox, false);
-        svg.classList.toggle('fine', level === 'village');
-        // 海岸線：同一層區域的聯集（data/map_*.json 的 coast），畫在最上面加粗描邊
-        svg.innerHTML = useCanvas ? '' : `<g class="ex-fog">${parts.off.join('')}</g><g class="ex-clear">${parts.on.join('')}</g>`
-            + (m.coast ? `<path class="ex-coast" d="${m.coast}"/>` : '');
+        svg._cv = { ...canvasData(m), fills, fine: level === 'village' };
+        svg.innerHTML = '';
         setHl(svg, null);
+        setViewBox(svg, m.viewBox);
         svg._names = new Map(m.paths.map(p => [p.code, p.name]));
         svg._paths = new Map(m.paths.map(p => [p.code, p]));
         svg._level = level;
@@ -416,6 +404,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
 
         if (level === 'village') {
             svg.style.display = 'none';
+            if (svg._canvas) svg._canvas.hidden = true;
             loading.hidden = true;
             villageOpen.hidden = false;
             root.querySelector('#ex-legend').innerHTML = '';
@@ -501,6 +490,10 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             svg._canvas.className = 'ex-map-cv';
             svg._canvas.setAttribute('aria-hidden', 'true');
             svg.after(svg._canvas);   // 順序：svg（接收事件）→ canvas → 外框疊層
+            // 視窗大小改變（手機轉向、彈窗大小）：重畫
+            if (window.ResizeObserver) new ResizeObserver(() => {
+                if (svg._cv && !svg._canvas.hidden && !svg._dragging && svg.isConnected) paintCanvas(svg);
+            }).observe(svg.parentNode);
         }
         return svg._canvas;
     }
@@ -528,27 +521,24 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const mx0 = vx - ox * s, my0 = vy - oy * s, mx1 = mx0 + r.width * s, my1 = my0 + r.height * s;
         const vis = cv.items.filter(x => x.box[2] >= mx0 && x.box[0] <= mx1 && x.box[3] >= my0 && x.box[1] <= my1);
         const css = getComputedStyle(svg), v = n => css.getPropertyValue(n).trim();
-        // 同 CSS：未解鎖 --c-text-faint（不透明度 0.75）、界線 --c-surface 0.25px、海岸線 --c-map-coast 1.1px
-        ctx.fillStyle = v('--c-text-faint');
+        // 顏色來自 CSS：未解鎖 --map-off（不透明度 0.75；小地圖、彈窗不同）、界線 --c-surface、海岸線 --c-map-coast
+        ctx.fillStyle = v('--map-off');
         ctx.globalAlpha = 0.75;
         for (const x of vis) if (!cv.fills.has(x.code)) ctx.fill(x.p2d);
         ctx.globalAlpha = 1;
         for (const x of vis) { const f = cv.fills.get(x.code); if (f) { ctx.fillStyle = f; ctx.fill(x.p2d); } }
         ctx.lineJoin = 'round';
         ctx.strokeStyle = v('--c-surface');
-        ctx.lineWidth = 0.25 * s;
+        ctx.lineWidth = (cv.fine ? 0.25 : 0.6) * s;   // 線寬固定為螢幕上的像素數（不隨縮放變粗）
         for (const x of vis) ctx.stroke(x.p2d);
-        if (cv.coast) { ctx.strokeStyle = v('--c-map-coast'); ctx.lineWidth = 1.1 * s; ctx.stroke(cv.coast); }
+        if (cv.coast) { ctx.strokeStyle = v('--c-map-coast'); ctx.lineWidth = (cv.fine ? 1.1 : 1.4) * s; ctx.stroke(cv.coast); }
     }
     // canvas 模式沒有 path 元素：用 { dataset, getAttribute } 代替，_showTip、setHl 照常使用
     const fakeEl = x => x && { dataset: { code: x.code }, getAttribute: () => x.d };
     let hitCtx = null;
     /** 螢幕上 (cx, cy) 的區域（path 元素或代替品）；沒有為 null */
     function hitAt(svg, cx, cy) {
-        if (!svg._cv) {
-            const h = document.elementFromPoint(cx, cy);
-            return h && svg.contains(h) && h.dataset && h.dataset.code ? h : null;
-        }
+        if (!svg._cv) return null;
         const { r, vx, vy, s, ox, oy } = viewOf(svg);
         const mx = vx + (cx - r.left - ox) * s, my = vy + (cy - r.top - oy) * s;
         hitCtx = hitCtx || document.createElement('canvas').getContext('2d');
@@ -556,7 +546,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         return fakeEl(x) || null;
     }
     /** 某代碼的區域（path 元素或代替品） */
-    const findEl = (svg, code) => svg._cv ? fakeEl(svg._cv.byCode.get(code)) : svg.querySelector(`path[data-code="${code}"]`);
+    const findEl = (svg, code) => svg._cv ? fakeEl(svg._cv.byCode.get(code)) : null;
 
     // 滑過顯示名稱與首次解鎖日期
     // 觸控時不用滑鼠事件（手指按下會補送 mousemove，雙指縮放時會誤選）；觸控的選取由放大彈窗的「單指點一下」處理
@@ -584,7 +574,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         svg.addEventListener('mousemove', e => {
             if (Date.now() - touchAt < 1500 || svg._pin) return;
             if (svg._dragging) { tip.hidden = true; return; }
-            svg._showTip(svg._cv ? hitAt(svg, e.clientX, e.clientY) : e.target, e.clientX, e.clientY);
+            svg._showTip(hitAt(svg, e.clientX, e.clientY), e.clientX, e.clientY);
         });
         svg.addEventListener('mouseleave', () => { if (Date.now() - touchAt >= 1500 && !svg._pin) svg._showTip(null); });
         if (interactive) bindTipManual(svg, tip, wrap);
@@ -731,7 +721,6 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         };
         const commitVb = () => { if (svg._vb && (raf || svg.style.transform)) draw(svg._vb); };
         svg._draw = draw;
-        if (window.ResizeObserver) new ResizeObserver(() => { if (svg._cv && !modal.hidden && !svg._dragging) paintCanvas(svg); }).observe(body);
         // 螢幕座標 → 地圖座標（preserveAspectRatio=meet：取較大的縮放比，並扣掉置中留白）
         // 用外框（地圖填滿它）量大小：手勢中地圖本身有 transform，量到的會不準
         const fit = v => {
@@ -824,7 +813,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                     lastTap = null;
                 } else {
                     lastTap = { t: now, x: e.clientX, y: e.clientY };
-                    const x = e.clientX, y = e.clientY, el = svg._cv ? hitAt(svg, x, y) : e.target;
+                    const x = e.clientX, y = e.clientY, el = hitAt(svg, x, y);
                     tapTimer = setTimeout(() => svg._showTip(el, x, y, true), 300);
                 }
             } else if (e.type === 'pointerup' && e.pointerType === 'mouse' && e.button === 0 && drag && !drag.moved && !pinch) {
@@ -1412,8 +1401,10 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (!state.data) return;
         renderYearly();
         if (dmodal && !dmodal.hidden && dmodal._data) drawDetailMap(dmodal._data.geo);
-        const msvg = modal && modal.querySelector('svg');
-        if (msvg && msvg._cv && !modal.hidden) paintCanvas(msvg);   // 村里 canvas 用到主題色
+        // 迷霧地圖的 canvas 用到主題色：小地圖、放大彈窗都重畫
+        const isvg = root.querySelector('#ex-map'), msvg = modal && modal.querySelector('svg');
+        if (isvg && isvg._cv && isvg._canvas && !isvg._canvas.hidden) paintCanvas(isvg);
+        if (msvg && msvg._cv && !modal.hidden) paintCanvas(msvg);
     });
 
     return {

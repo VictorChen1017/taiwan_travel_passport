@@ -199,7 +199,7 @@
     box-shadow: inset 0 0 0 2px rgba(255, 77, 26, 0.45);
 }
 
-.ex-mapwrap .ex-map path {
+.ex-mapwrap .ex-map {
     cursor: zoom-in;
 }
 
@@ -246,40 +246,14 @@
     color: var(--ex-muted);
 }
 
+/* 迷霧地圖：區域畫在 canvas（js/explore.js paintCanvas），svg 是空的，只接收觸控、滑鼠並提供視窗
+   canvas 讀這裡的 --map-off（未解鎖的迷霧色，不透明度 0.75）；界線 --c-surface、海岸線 --c-map-coast */
 .ex-map {
+    --map-off: var(--ex-fog);
     display: block;
     width: 100%;
     height: 100%;
     min-height: 420px;
-}
-
-.ex-map path {
-    stroke: var(--c-surface);
-    stroke-width: 0.6px;
-    vector-effect: non-scaling-stroke;
-    stroke-linejoin: round;
-    cursor: default;
-}
-
-.ex-map.fine path {
-    stroke-width: 0.25px;
-}
-
-.ex-map path.off {
-    fill: var(--ex-fog);
-    fill-opacity: 0.75;
-}
-
-/* 海岸線：同一層區域的聯集，加粗描邊 */
-.ex-map path.ex-coast {
-    fill: none;
-    stroke: var(--c-map-coast);
-    stroke-width: 1.4px;
-    pointer-events: none;
-}
-
-.ex-map.fine path.ex-coast {
-    stroke-width: 1.1px;
 }
 
 /* 滑過／點選的外框：畫在疊在地圖上的另一張 SVG（js/explore.js setHl），不會被鄰居蓋住、也不用重畫整張地圖 */
@@ -1397,8 +1371,7 @@ body.ex-modal-open {
     user-select: none;
 }
 
-.ex-modal-map.dragging,
-.ex-modal-map.dragging path {
+.ex-modal-map.dragging {
     cursor: grabbing;
 }
 
@@ -1406,9 +1379,8 @@ body.ex-modal-open {
     color: var(--c-text-muted);
 }
 
-.ex-modal .ex-map path.off {
-    fill: var(--c-text-faint);
-    fill-opacity: 0.75;
+.ex-modal .ex-map {
+    --map-off: var(--c-text-faint);
 }
 
 .ex-modal .ex-map-hl path {
