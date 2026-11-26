@@ -1349,6 +1349,13 @@ body.ex-modal-open {
     background: var(--c-surface-3);
 }
 
+/* 河川開關（放大地圖）：開著時用強調色框起來 */
+.ex-modal-tools .ex-modal-water[aria-pressed="true"] {
+    color: var(--c-accent-strong);
+    background: var(--c-accent-soft);
+    border-color: var(--c-accent);
+}
+
 .ex-modal-tools .ex-modal-x {
     font-size: calc(16px * var(--fs, 1));
 }

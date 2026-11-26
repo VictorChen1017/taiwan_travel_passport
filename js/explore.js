@@ -35,9 +35,14 @@ const REGIONS = {
     all: { label: '全部', box: null },
 };
 const DEFAULT_REGION = 'main';
+// 放大地圖的河川圖層開關（localStorage；只是顯示偏好，預設開）
+const WATER_KEY = 'fog-map-water';
+const waterOn = () => { try { return localStorage.getItem(WATER_KEY) !== '0'; } catch (e) { return true; } };
 const regionBox = ([w, s, e, n]) => ({ x: w * MAP_KX, y: -n, w: (e - w) * MAP_KX, h: n - s });
-// 放大上限：視窗最窄 0.15 地圖單位（約 16 公里寬，一個鄉鎮大致佔滿手機畫面）；再放大會看出界線簡化（約 200 公尺）的瑕疵
-const MIN_VIEW_W = 0.15;
+// 放大上限（視窗最窄幾個地圖單位）：縣市、鄉鎮 0.15（約 16 公里寬，一個鄉鎮大致佔滿手機畫面）；
+// 村里再多三級（按鈕一級 1.5 倍 → ÷ 1.5³ ≈ 3.4，約 5 公里寬），方便手指點小村里（2026-11-26 維護者要求，先兩級再加一級）。
+// 村里界簡化容許值約 180 公尺，放到最大時直線感較明顯，但整層一起簡化、不會有縫
+const MIN_VIEW_W = { county: 0.15, town: 0.15, village: 0.15 / 1.5 ** 3 };
 const isPointDetail = id => Object.values(POINT_STAMPS).some(p => id.startsWith(p.prefix));
 
 const pad = n => String(n).padStart(2, '0');
@@ -479,6 +484,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (!m._cv) m._cv = {
             items: m.paths.map(p => ({ code: p.code, d: p.d, p2d: new Path2D(p.d), box: pathBox(p.d) })),
             coast: m.coast ? new Path2D(m.coast) : null,
+            counties: m.counties ? new Path2D(m.counties) : null,   // 鄉鎮、村里層才有：同層簡化後依縣市聯集（和區域界線對齊）
         };
         m._cv.byCode = m._cv.byCode || new Map(m._cv.items.map(x => [x.code, x]));
         return m._cv;
@@ -531,6 +537,19 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         ctx.strokeStyle = v('--c-surface');
         ctx.lineWidth = (cv.fine ? 0.25 : 0.6) * s;   // 線寬固定為螢幕上的像素數（不隨縮放變粗）
         for (const x of vis) ctx.stroke(x.p2d);
+        // 水系（只有放大彈窗有 svg._water）：河川、水庫湖泊填色，再描一圈同色細線，窄的河段縮小時才不會斷掉
+        const water = svg._water && waterOn() && svg._water.filter(x => x.box[2] >= mx0 && x.box[0] <= mx1 && x.box[3] >= my0 && x.box[1] <= my1);
+        if (water && water.length) {
+            ctx.fillStyle = ctx.strokeStyle = v('--c-map-water');
+            ctx.lineWidth = 0.8 * s;
+            for (const x of water) { ctx.fill(x.p2d); ctx.stroke(x.p2d); }
+        }
+        // 縣市粗邊界：只在放大彈窗的鄉鎮、村里層；粗細介於區域界線與海岸線之間（海岸線最後畫，蓋掉縣市界沿海的部分）
+        if (cv.counties && svg.classList.contains('ex-modal-map')) {
+            ctx.strokeStyle = v('--c-map-coast');
+            ctx.lineWidth = (cv.fine ? 0.7 : 1) * s;
+            ctx.stroke(cv.counties);
+        }
         if (cv.coast) { ctx.strokeStyle = v('--c-map-coast'); ctx.lineWidth = (cv.fine ? 1.1 : 1.4) * s; ctx.stroke(cv.coast); }
     }
     // canvas 模式沒有 path 元素：用 { dataset, getAttribute } 代替，_showTip、setHl 照常使用
@@ -669,6 +688,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                     <span class="ex-modal-tools">
                         <button type="button" data-act="in" title="放大">＋</button>
                         <button type="button" data-act="out" title="縮小">－</button>
+                        <button type="button" data-act="water" class="ex-modal-water" aria-pressed="${waterOn()}" title="顯示河川、水庫與湖泊">💧 河川</button>
                         <button type="button" data-act="reset" title="重設">重設</button>
                         <button type="button" data-act="close" class="ex-modal-x" title="關閉（Esc）">✕</button>
                     </span>
@@ -735,7 +755,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         // 寬度 w 的視窗，讓地圖點 p 落在螢幕 (cx, cy)；寬度限制在 [MIN_VIEW_W, 全圖]
         const placeAt = (p, cx, cy, w, from) => {
             const base = svg._base;
-            w = Math.min(base.w, Math.max(MIN_VIEW_W, w));
+            w = Math.min(base.w, Math.max(MIN_VIEW_W[svg._level] || MIN_VIEW_W.town, w));
             if (w === base.w) return { ...base };
             const v = { x: 0, y: 0, w, h: w * from.h / from.w };
             const { r, s, ox, oy } = fit(v);
@@ -840,6 +860,14 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             else if (act === 'in') zoom(1.5);
             else if (act === 'out') zoom(1 / 1.5);
             else if (act === 'reset') goRegion(DEFAULT_REGION);
+            else if (act === 'water') {
+                const on = !waterOn();
+                try { localStorage.setItem(WATER_KEY, on ? '1' : '0'); } catch (err) { /* 存不了只影響這次 */ }
+                e.target.setAttribute('aria-pressed', on);
+                const svg = modal.querySelector('svg');
+                if (on) loadWater(svg);
+                if (svg._cv) paintCanvas(svg);
+            }
             else if (ds.region) goRegion(ds.region);
         });
         document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
@@ -863,7 +891,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (!prev) svg.innerHTML = '';
         modal.querySelector('.ex-modal-legend').innerHTML = '';
         loading.hidden = !!prev;
-        loading.textContent = level === 'village' ? '載入村里地圖中（約 380 KB）…' : '載入地圖中…';
+        loading.textContent = level === 'village' ? '載入村里地圖中（約 400 KB）…' : '載入地圖中…';
         let m;
         try {
             m = await getMap(level);
@@ -879,8 +907,21 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (prev) { svg._vb = prev.vb; svg._draw(prev.vb); }
         else svg._goRegion(DEFAULT_REGION);
         modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1, level);
+        loadWater(svg);
         const el = prev && prev.pin && findEl(svg, prev.pin.code);
         if (el) svg._showTip(el, prev.pin.x, prev.pin.y, true);
+    }
+
+    /**
+     * 水系圖層（data/map_water.json，tools/export_water.py 產生）：主要河川主流、大型水庫與湖泊，只畫在放大彈窗（小地圖太小會變雜）。
+     * 第一次開彈窗時才下載；失敗就不畫，不影響地圖。工具列「💧 河川」開關（預設開，記在 localStorage）；關著時不下載
+     */
+    function loadWater(svg) {
+        if (!waterOn() || svg._water || svg._waterLoading) return;
+        svg._waterLoading = getMap('water').then(w => {
+            svg._water = [...w.rivers, ...w.lakes].filter(x => x.d).map(x => ({ p2d: new Path2D(x.d), box: pathBox(x.d) }));
+            if (svg._cv && !modal.hidden && !svg._dragging) paintCanvas(svg);
+        }).catch(() => { svg._waterLoading = null; });
     }
 
     // 放大彈窗換上色方式：重畫區域，保留目前的縮放位置

@@ -119,6 +119,11 @@ if ($want('maps')) {
                 FROM k GROUP BY code, name ORDER BY code";
         // 海岸線（加粗描邊用）：同一層簡化後的區域聯集，和區域界線完全對齊
         $coast = $pg->query("$with SELECT ST_AsSVG(ST_Scale(ST_CoverageUnion(part), " . MAP_KX . ", 1), 1, 3) FROM k")->fetchColumn();
+        // 縣市界（鄉鎮、村里層的放大彈窗畫粗邊界用）：同一層簡化後的區域依縣市代碼（代碼前 5 碼）聯集，
+        // 和區域界線完全對齊（用 map_county.json 的話簡化容許值不同，放大後會錯開）
+        // 先 ST_Dump 拆成單一多邊形再 ST_Collect：直接收集 MultiPolygon 會變成 GeometryCollection，ST_AsSVG 會用「;」分隔，Path2D 讀不了
+        $counties = $level === 'county' ? null : $pg->query("$with SELECT ST_AsSVG(ST_Scale(ST_Collect(poly), " . MAP_KX . ", 1), 1, 3)
+            FROM (SELECT (ST_Dump(ST_CoverageUnion(part))).geom AS poly FROM k GROUP BY left(code, 5)) s")->fetchColumn();
         // 迷霧地圖補點（SPEC §15.5）：c＝代表點 [緯度, 經度]（未簡化界線的 ST_PointOnSurface，保證在面內）；
         // 鄉鎮另給 v、vn＝代表點所在的村里代碼與名稱（落在沒有名稱的村里時改用該鄉鎮面積最大、有名稱的村里，並以那個村里的代表點為 c）
         $centers = [];
@@ -149,7 +154,8 @@ if ($want('maps')) {
         $viewBox = sprintf('%.3f %.3f %.3f %.3f',
             ($ext['x0'] - $pad) * MAP_KX, -($ext['y1'] + $pad),
             ($ext['x1'] - $ext['x0'] + 2 * $pad) * MAP_KX, $ext['y1'] - $ext['y0'] + 2 * $pad);
-        write_json("map_$level.json", ['level' => $level, 'viewBox' => $viewBox, 'coast' => $coast, 'paths' => $paths]);
+        write_json("map_$level.json", ['level' => $level, 'viewBox' => $viewBox, 'coast' => $coast]
+            + ($counties ? ['counties' => $counties] : []) + ['paths' => $paths]);
     }
 }
 
