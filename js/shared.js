@@ -9,7 +9,8 @@ export const NO_TIER_COLOR = '#0284c7';   // 不分等級的卡片（鐵道）�
 // 分類標題色（同 css/explore.css 的 .ex-badge-group-title.g-*）
 export const GROUP_COLOR = { milestone: '#ff4d1a', conquer: '#e0a526', pole: '#3fa7c2', island: '#14b8a6', landmark: '#ec4899', bspot: '#7c3aed', peak: '#0f766e', rail: '#0284c7', metro: '#d90023', lrt: '#7cbd52', nature: '#16a34a', travel: '#8b5cf6', festival: '#c8102e' };
 
-// 節慶活動集點卡（js/xmas.js 的像素夜景）：夜空、星星、建築剪影、耶誕樹、年份戳章
+// 節慶與民俗活動集章卡（js/scenes.js 的像素場景）
+// xmas 新北撒旦城：夜空、星星、建築剪影、耶誕樹、戳章
 export const XMAS_COLORS = {
     sky: ['#070b1f', '#0b1130', '#101640', '#161b4c', '#1d1f55', '#25235c', '#2e2662', '#382a66', '#432d68'],
     star: ['#ffffff', '#fff6c8', '#cfe3ff'], moon: '#fdf1c0',
@@ -18,6 +19,19 @@ export const XMAS_COLORS = {
     tree: '#1f8a42', treeDark: '#15642f', trunk: '#6b3e1f', top: '#ffd700',
     lights: ['#ff4d4d', '#ffcc33', '#5bc0ff', '#ff7ad9'],
     beacon: '#ff3b3b', glow: '#3d3470', stamp: '#c8102e',
+};
+// yuelao 月老巡禮：玫瑰色夜空、滿月、遠山與榕樹、燈籠串、紅線與愛心、月老、廟（燕尾脊、紅牆、門釘）
+export const YUELAO_COLORS = {
+    sky: ['#120a24', '#1a0f30', '#24133a', '#2f1742', '#3b1b48', '#4a1f4d', '#5a2350', '#6b2852', '#7c2d52'],
+    star: ['#ffffff', '#ffe9f2', '#fff6c8'], moon: '#fff1c1', crater: '#efd99a',
+    hill: '#2a1a3d', hillNear: '#1d1230', tree: '#173326', treeDark: '#10241b',
+    ground: '#231c28', plaza: '#4a3f52', step: '#6a5f70',
+    thread: '#e8173f', heart: '#ff6b9d', lantern: '#e0262c', lanternCap: '#f2c14e', cord: '#4b2b3a',
+    skin: '#f1c9a0', hair: '#f5f5f0', robe: '#c8102e', robeDark: '#8f0b22', belt: '#f2c14e', shoe: '#1b1b1b',
+    staff: '#7a4a22', gourd: '#f0a330', book: '#2b4c8c',
+    roof: '#b5462b', roofDark: '#7f2e1c', ridge: '#d9a441', wall: '#9e1b1b', wallDark: '#6e1212',
+    pillar: '#d2352f', door: '#5c0d0d', stud: '#e8b923', beam: '#1f6f6b', window: '#3a1010',
+    burner: '#8a6d3b', smoke: '#d8d0e0',
 };
 
 // 徽章圖示（24×24 座標）

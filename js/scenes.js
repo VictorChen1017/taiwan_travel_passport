@@ -1,11 +1,12 @@
-// 節慶活動集點卡的像素場景：成就頁（SVG，js/explore.js）與分享成就（Canvas、GIF 動圖，js/report.js）共用同一份像素資料
+// 節慶與民俗活動集章卡的像素場景：成就頁（SVG，js/explore.js）與分享成就（Canvas、GIF 動圖，js/report.js）共用同一份像素資料
 // 場景依成就的 scene（tools/config/achievements.php 的 festivals）挑選：新增節慶時在 SCENES 加一張
 //   像素格式 [x, y, w, h, 顏色, 閃爍組（0 不閃；1–4）]；閃爍組在成就頁用 CSS、動圖用 XMAS_FRAMES 格輪流變暗
 //
 // xmas：新北撒旦城（星空、月亮、板橋站周邊大樓剪影、耶誕樹）
 // 大樓是示意剪影：新北市政府（頂部鏤空框架）、板橋車站（低矮長形）、大遠百（雙塔）
+// yuelao：月老巡禮（玫瑰色夜空、滿月、燈籠串、紅線與愛心、月老、廟）；廟是示意（燕尾脊、紅牆、門釘），不是特定一間
 
-import { XMAS_COLORS as C } from './shared.js';
+import { XMAS_COLORS as C, YUELAO_COLORS as Y } from './shared.js';
 
 export const XMAS_W = 200, XMAS_H = 54;   // 像素格數（寬、高）；左邊 80 格是一般住宅（成就頁的戳章疊在這裡），地標與耶誕樹在右邊
 const OX = 80;                            // 地標區的起點
@@ -110,11 +111,143 @@ function xmasPixels() {
     return px;
 }
 
-/** 場景表：id → { w, h（像素格數）, pixels() } */
+/** 月老巡禮：左邊遠山、榕樹、紅線與愛心（戳章疊在這裡），右邊月老、香爐、廟，右上滿月 */
+let yuelaoCache = null;
+function yuelaoPixels() {
+    if (yuelaoCache) return yuelaoCache;
+    const W = XMAS_W, px = [];
+    const put = (x, y, w, h, c, tw = 0) => px.push([x, y, w, h, c, tw]);
+    let seed = 7070707;   // 七夕
+    const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+
+    // 夜空與星星
+    const band = Math.ceil(GROUND / Y.sky.length);
+    Y.sky.forEach((c, i) => put(0, i * band, W, Math.min(band, GROUND - i * band), c));
+    const MX = 186, MY = 10;
+    for (let k = 0; k < 80; k++) {
+        const x = Math.floor(rnd() * W), y = Math.floor(rnd() * 26);
+        if (Math.abs(x - MX) < 9 && y < 19) continue;
+        put(x, y, 1, 1, Y.star[k % 3], rnd() < 0.35 ? 1 + (k % 4) : 0);
+    }
+    [[30, 6], [62, 3], [100, 8], [140, 4], [12, 16]].forEach(([x, y], k) => {
+        const c = Y.star[k % 2], tw = 1 + (k % 4);
+        put(x, y - 1, 1, 3, c, tw); put(x - 1, y, 3, 1, c, tw);
+    });
+    // 滿月（月下老人）
+    for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) {
+        if (dx * dx + dy * dy <= 36) put(MX + dx, MY + dy, 1, 1, Y.moon);
+    }
+    [[-2, -2], [2, 1], [-1, 3], [3, -3]].forEach(([dx, dy]) => put(MX + dx, MY + dy, 1, 1, Y.crater));
+
+    // 遠山（兩層）
+    for (let x = 0; x < 112; x++) {
+        const h1 = 13 + Math.round(5 * Math.sin(x / 13) + 3 * Math.sin(x / 5.5));
+        put(x, GROUND - h1, 1, h1, Y.hill);
+    }
+    for (let x = 0; x < 112; x++) {
+        const h2 = 6 + Math.round(3 * Math.sin(x / 9 + 1) + 2 * Math.sin(x / 4));
+        put(x, GROUND - h2, 1, h2, Y.hillNear);
+    }
+    // 榕樹（左邊）
+    put(14, 34, 3, GROUND - 34, Y.staff);
+    for (let dy = -7; dy <= 5; dy++) {
+        const hw = Math.round(11 * Math.sqrt(1 - (dy / 8) ** 2));
+        put(15 - hw, 30 + dy, hw, 1, Y.tree); put(15, 30 + dy, hw + 1, 1, Y.treeDark);
+    }
+
+    // 地面、廟埕
+    put(0, GROUND, W, XMAS_H - GROUND, Y.ground);
+    put(0, GROUND, W, 1, Y.plaza);
+
+    // 紅線：從月老的手往左延伸，在地面附近起伏，上面有幾顆會閃的愛心
+    const threadY = x => 41 + Math.round(3 * Math.sin(x / 8));
+    for (let x = 4; x <= 86; x++) put(x, threadY(x), 1, 1, Y.thread);
+    for (let y = threadY(86); y >= 33; y--) put(87, y, 1, 1, Y.thread);
+    [18, 40, 62].forEach((x, k) => {
+        const y = threadY(x) - 5, tw = 1 + k;
+        put(x - 1, y, 1, 1, Y.heart, tw); put(x + 1, y, 1, 1, Y.heart, tw);
+        put(x - 1, y + 1, 3, 1, Y.heart, tw); put(x, y + 2, 1, 1, Y.heart, tw);
+    });
+
+    // 燈籠串：從廟簷往左上斜拉，燈籠會閃
+    const cordY = x => Math.round(14 + (x - 70) * 0.25 + 4 * Math.sin((x - 70) / 48 * Math.PI));
+    for (let x = 70; x <= 118; x++) put(x, cordY(x), 1, 1, Y.cord);
+    [76, 86, 96, 106].forEach((x, k) => {
+        const y = cordY(x) + 1;
+        put(x, y, 2, 1, Y.lanternCap); put(x - 1, y + 1, 4, 3, Y.lantern, 1 + ((k + 1) % 4)); put(x, y + 4, 2, 1, Y.lanternCap);
+    });
+
+    // 月老（x 88–106）：白髮白鬍、紅袍、左手拐杖（葫蘆）、右手姻緣簿
+    const ox = 88;
+    put(ox + 1, 22, 2, 2, Y.gourd); put(ox + 1, 20, 2, 1, Y.gourd); put(ox + 2, 19, 1, 1, Y.thread);   // 葫蘆、紅繩
+    put(ox + 1, 24, 1, GROUND - 24, Y.staff);                                                       // 拐杖
+    put(ox + 7, 23, 4, 1, Y.hair); put(ox + 8, 22, 2, 1, Y.hair);                                   // 髮髻
+    put(ox + 6, 24, 6, 5, Y.skin); put(ox + 6, 24, 6, 1, Y.hair);                                   // 臉、白髮
+    put(ox + 7, 26, 1, 1, Y.shoe); put(ox + 10, 26, 1, 1, Y.shoe);                                  // 眼睛
+    for (let y = 29; y < GROUND - 1; y++) {                                                         // 紅袍（下襬變寬）
+        const hw = 3 + Math.floor((y - 29) / 4);
+        put(ox + 9 - hw, y, hw, 1, Y.robe); put(ox + 9, y, hw, 1, Y.robeDark);
+    }
+    put(ox + 6, 28, 6, 2, Y.hair); put(ox + 7, 30, 4, 3, Y.hair); put(ox + 8, 33, 2, 2, Y.hair);       // 長鬍子
+    put(ox + 4, 36, 10, 1, Y.belt);                                                                 // 腰帶
+    put(ox + 2, 31, 3, 2, Y.robe); put(ox + 1, 32, 2, 2, Y.skin);                                   // 左手握拐杖
+    put(ox + 13, 31, 3, 2, Y.robeDark); put(ox + 14, 33, 4, 4, Y.book); put(ox + 15, 34, 2, 2, Y.belt); // 右手姻緣簿
+    put(ox + 5, GROUND - 1, 3, 1, Y.shoe); put(ox + 11, GROUND - 1, 3, 1, Y.shoe);                  // 鞋
+
+    // 香爐與煙（煙會閃）
+    put(108, 44, 6, 4, Y.burner); put(107, 43, 8, 1, Y.burner);
+    [[110, 40, 1], [111, 37, 2], [110, 34, 3], [112, 31, 4]].forEach(([x, y, tw]) => put(x, y, 1, 2, Y.smoke, tw));
+
+    // 廟（x 116–196）：台階、紅牆、柱子、門與門釘、窗、彩繪樑、屋頂、燕尾脊
+    const L = 118, R = 194, mid = (L + R) / 2;
+    put(L - 2, 45, R - L + 5, 3, Y.step); put(L, 44, R - L + 1, 1, Y.plaza);
+    put(L + 2, 30, R - L - 3, 14, Y.wall);
+    put(L + 2, 30, R - L - 3, 1, Y.wallDark);
+    [L + 2, L + 18, R - 19, R - 3].forEach(x => put(x, 30, 2, 14, Y.pillar));
+    // 中門與門釘
+    put(mid - 7, 34, 14, 10, Y.door);
+    put(mid, 34, 1, 10, Y.wallDark);
+    for (let y = 36; y < 43; y += 2) for (let x = mid - 6; x < mid + 7; x += 2) if (x !== mid) put(x, y, 1, 1, Y.stud);
+    // 匾額
+    put(mid - 5, 31, 10, 2, Y.beam); put(mid - 4, 31, 8, 1, Y.stud);
+    // 側窗（格子）
+    [L + 7, R - 15].forEach(x => {
+        put(x, 35, 8, 6, Y.window);
+        for (let k = 0; k < 8; k += 2) put(x + k, 35, 1, 6, Y.stud);
+    });
+    // 彩繪樑
+    put(L, 28, R - L + 1, 2, Y.beam);
+    for (let x = L + 2; x < R; x += 5) put(x, 28, 2, 1, Y.stud);
+    // 屋頂：上窄下寬，瓦片橫紋
+    for (let y = 19; y <= 27; y++) {
+        const ext = Math.round((y - 19) * 1.1);
+        put(L + 4 - ext, y, R - L - 7 + ext * 2, 1, (y % 2) ? Y.roof : Y.roofDark);
+    }
+    // 屋脊與燕尾（兩端往上翹、分叉）
+    put(L + 4, 18, R - L - 7, 1, Y.ridge);
+    [[0, 0], [-1, -1], [-2, -2], [-3, -3], [-4, -5], [-2, -5]].forEach(([dx, dy]) => {
+        put(L + 4 + dx, 18 + dy, 1, 1, Y.ridge);
+        put(R - 3 - dx, 18 + dy, 1, 1, Y.ridge);
+    });
+    // 脊上的寶塔與雙龍示意
+    put(mid - 1, 14, 3, 4, Y.ridge); put(mid, 12, 1, 2, Y.lanternCap, 2);
+    put(mid - 12, 16, 8, 2, Y.beam); put(mid + 5, 16, 8, 2, Y.beam);
+    // 簷下燈籠（會閃）
+    [L + 10, R - 10].forEach((x, k) => {
+        put(x, 30, 1, 1, Y.cord); put(x - 1, 31, 3, 1, Y.lanternCap); put(x - 2, 32, 5, 4, Y.lantern, 3 + k); put(x - 1, 36, 3, 1, Y.lanternCap);
+    });
+
+    yuelaoCache = px;
+    return px;
+}
+
+/** 場景表：id → { w, h（像素格數）, emoji（卡片標題前的圖示）, pixels() } */
 export const SCENES = {
-    xmas: { w: XMAS_W, h: XMAS_H, pixels: xmasPixels },
+    xmas: { w: XMAS_W, h: XMAS_H, emoji: '🎄', pixels: xmasPixels },
+    yuelao: { w: XMAS_W, h: XMAS_H, emoji: '🧧', pixels: yuelaoPixels },
 };
 const sceneOf = id => SCENES[id] || SCENES.xmas;
+export const sceneEmoji = id => sceneOf(id).emoji;
 /** 場景的像素格數 [寬, 高] */
 export const sceneSize = id => { const sc = sceneOf(id); return [sc.w, sc.h]; };
 
@@ -150,5 +283,9 @@ export function paintScene(ctx, id, x, y, w, h, frame = -1) {
     ctx.restore();
 }
 
-/** 年份戳章的傾斜角度（度；每年固定，看起來像隨手蓋的） */
-export const stampTilt = year => ((year * 37) % 17) - 8;
+/** 戳章的傾斜角度（度；依戳章中間的字固定，看起來像隨手蓋的） */
+export const stampTilt = label => {
+    let n = 0;
+    for (const ch of String(label)) n = (n * 31 + ch.codePointAt(0)) % 100003;
+    return ((n * 37) % 17) - 8;
+};

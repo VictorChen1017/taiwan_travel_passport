@@ -15,9 +15,9 @@
 import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor, CONQUER_LEVELS, conquerColor } from './shared.js';
 import { TILE } from './tiles.js';
 import { TOUCH, tapWord } from './device.js';
-import { sceneSvg, stampTilt } from './xmas.js';
+import { sceneSvg, sceneEmoji, stampTilt } from './scenes.js';
 
-export const GROUP_LABEL = { milestone: '里程碑', conquer: '制霸', pole: '極點', island: '離島', landmark: '景點', bspot: 'B 級景點', peak: '登山', rail: '臺鐵・高鐵', metro: '捷運', lrt: '輕軌', nature: '國家公園與保護區', festival: '節慶活動', travel: '旅行' };
+export const GROUP_LABEL = { milestone: '里程碑', conquer: '制霸', pole: '極點', island: '離島', landmark: '景點', bspot: 'B 級景點', peak: '登山', rail: '臺鐵・高鐵', metro: '捷運', lrt: '輕軌', nature: '國家公園與保護區', festival: '節慶與民俗活動', travel: '旅行' };
 // 隱藏類別：一個都還沒達成時不出現（成就目錄、總覽也不列）
 export const HIDDEN_GROUPS = new Set(['festival']);
 const UNIT_LABEL = { county: '縣市', town: '鄉鎮', village: '村里' };
@@ -931,7 +931,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         dmodal.querySelector('.ex-dmodal-note').textContent = d.note || `${d.rows.length} 筆`;
         const rows = [...d.rows].sort((x, y) => y[key] - x[key] || y.date - x.date);
         const body = dmodal.querySelector('.ex-dmodal-body');
-        body.classList.toggle('name-first', d.id === 'regular' || isPointDetail(d.id)); // 第一欄是較長的名稱（村里、山名、站名）
+        body.classList.toggle('name-first', d.id === 'regular' || isPointDetail(d.id) || !!d.nameFirst); // 第一欄是較長的名稱（村里、山名、站名）
         body.classList.toggle('two-col', d.columns.length === 2);
         const ps = Object.values(POINT_STAMPS).find(p => d.id.startsWith(p.prefix));
         // 手動紀錄：地點類在最下方「我有去過，手動加入！」；集點卡在未到的列旁「＋ 我去過」；手動紀錄的列可刪除
@@ -1143,19 +1143,19 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         </div>`;
     }
 
-    // 節慶活動集點卡：像素場景（依 a.scene）＋去過的年份戳章（新到舊）
+    // 節慶與民俗活動集章卡：像素場景（依 a.scene）＋蓋到的戳章（新到舊；年份型或地點型，戳章上中下的字由計算給）
     function festivalCard(a) {
-        const years = a.cells.length;
-        const stamps = a.cells.map(c => `<span class="ex-fest-stamp" style="--tilt:${stampTilt(c.year)}deg"
-            title="${c.year} 年：${c.date ? fmtDate(c.date) : '時間不明'}${c.auto ? '' : '（手動加入）'}">
-            <small>${esc(a.stamp?.[0] || '')}</small><b>${c.year}</b><small>${c.auto ? esc(a.stamp?.[1] || '') : '✋ 手動'}</small></span>`).join('');
+        const other = a.kind === 'places' ? '其他地點' : '其他年份';
+        const stamps = a.cells.map(c => `<span class="ex-fest-stamp" style="--tilt:${stampTilt(c.label)}deg"
+            title="${esc(c.name || c.label + ' 年')}：${c.date ? fmtDate(c.date) : '時間不明'}${c.bottom === '✋ 手動' ? '（手動加入）' : ''}">
+            ${c.top ? `<small>${esc(c.top)}</small>` : ''}<b>${esc(c.label)}</b>${c.bottom ? `<small>${esc(c.bottom)}</small>` : ''}</span>`).join('');
         return `<div class="ex-badge ex-fest done clickable" data-id="${esc(a.id)}" role="button" tabindex="0" title="${esc(a.desc)}
-（點擊看明細、手動加入其他年份）">
+（點擊看明細、手動加入${other}）">
             <div class="ex-fest-scene">${sceneSvg(a.scene, 'ex-fest-svg')}
-                <div class="ex-fest-title"><b>🎄 ${esc(a.name)}</b><span>已去過 ${years} 年</span></div>
+                <div class="ex-fest-title"><b>${sceneEmoji(a.scene)} ${esc(a.name)}</b><span>${esc(a.summary)}</span></div>
                 <div class="ex-fest-stamps">${stamps}</div></div>
             <div class="ex-badge-desc">${esc(a.desc)}</div>
-            <div class="ex-badge-more">📋 看明細・手動加入其他年份</div>
+            <div class="ex-badge-more">📋 看明細・手動加入${other}</div>
         </div>`;
     }
 

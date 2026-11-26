@@ -1786,7 +1786,7 @@ body.ex-modal-open {
     padding: 12px;
 }
 
-/* 節慶活動集點卡（新北撒旦城）：像素風夜景＋年份戳章 */
+/* 節慶與民俗活動集章卡：像素場景＋戳章（年份或地點） */
 .ex-fest {
     margin-bottom: 14px;
     padding: 0 0 16px;
@@ -1874,14 +1874,20 @@ body.ex-modal-open {
     font-family: "Courier New", monospace;
 }
 
+/* 中間的字（年份、廟名簡稱）一律同大小 */
 .ex-fest-stamp b {
-    font-size: calc(19px * var(--fs, 1));
-    letter-spacing: 1px;
+    font-size: calc(18px * var(--fs, 1));
+    letter-spacing: 0;
 }
 
 .ex-fest-stamp small {
     font-size: calc(9px * var(--fs, 1));
     font-weight: bold;
+}
+
+/* 上方的字（地區、耶誕城）與中間的字留一點距離 */
+.ex-fest-stamp small:first-child {
+    margin-bottom: 3px;
 }
 
 /* 星星、彩燈閃爍（四組錯開） */

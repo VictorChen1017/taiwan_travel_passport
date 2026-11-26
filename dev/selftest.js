@@ -10,7 +10,7 @@ import { renderReport, renderFestivalGif, PRESETS, BLOCKS, subsOf, DEFAULT_SUB_O
 // 基準值：原專案照片（test/legacy/photos.json）在 2026-11-21 圖資下的結果
 const BASE = {
     county: [19, 22], town: [219, 368], village: [1287, 7975],
-    photoAchievements: [70, 259],    // 照片模式：達成 / 總數（含「老地方」；2026-11-26 起含新北撒旦城，測試照片有去過）
+    photoAchievements: [71, 260],    // 照片模式：達成 / 總數（含「老地方」；2026-11-26 起含新北撒旦城、月老巡禮，測試照片都有去過）
     yushanVillage: '10008120011',    // 玉山主峰所在村里（東埔村）；照片裡沒有
 };
 
@@ -197,6 +197,48 @@ async function run() {
         const e0 = diff(g0, src(0)), e2 = diff(g2, src(2)), between = diff(g0, g2);
         return res(count === 8 && e0 < 3 && e2 < 3 && between > 0,
             `${count} 格、${Math.round(blob.size / 1024)} KB、${ms} ms；和原圖平均差 ${e0.toFixed(2)}／${e2.toFixed(2)}（< 3）、第 1 與第 3 格差 ${between.toFixed(3)}（> 0）`);
+    });
+
+    // ---------- 民俗活動（月老巡禮：地點型集章） ----------
+    const yl = achDefs.festivals?.find(f => f.id === 'fest_yuelao');
+    const ylAt = (code, t = Date.UTC(2024, 7, 10, 10) / 1000, dLat = 0) => { const p = yl.places.find(x => x.code === code); return [p.lat + dLat, p.lng, t]; };
+    await check('民俗活動', '月老巡禮：每間一個章、半徑 50 公尺（台南兩間不重疊）；沒去過不列出', async () => {
+        if (!yl) return res(false, 'achievements.json 沒有 fest_yuelao（要重新匯出成就）');
+        const none = await fog.compute(synth([ylAt('tianhou', undefined, 0.001)]), 'visit');   // 約 110 公尺外
+        const s = await fog.compute(synth([ylAt('tianhou'), ylAt('xiahai', Date.UTC(2023, 1, 1, 9) / 1000), ylAt('xiahai', Date.UTC(2025, 1, 1, 9) / 1000)]), 'visit');
+        const a = ach(s, 'fest_yuelao');
+        const codes = a ? a.cells.map(c => c.code).join(',') : '';
+        const xh = a?.cells.find(c => c.code === 'xiahai');
+        return res(!ach(none, 'fest_yuelao') && codes === 'tianhou,xiahai' && xh.date === Date.UTC(2023, 1, 1, 9) / 1000 && a.summary === '已參拜 2 / 13 間',
+            `沒去過 ${ach(none, 'fest_yuelao') ? '仍列出' : '不列出'}；章 ${codes}（應為 tianhou,xiahai，不含武廟）；${a?.summary}`);
+    });
+    await check('民俗活動', '月老巡禮：手動加入（kind 3）、明細列出 13 間、地圖 13 點', async () => {
+        const p = yl.places.find(x => x.code === 'chongqing');
+        const m = manual.emptyManual();
+        m.items.push(manual.newItem({ target: `fest_yuelao#chongqing`, label: p.name, lat: p.lat, lng: p.lng, area: false }, '2024-08-10'));
+        manual.refresh(m);
+        const s = await fog.compute(records(synth([ylAt('xiahai')]), m), 'visit');
+        const c = ach(s, 'fest_yuelao')?.cells.find(x => x.code === 'chongqing');
+        const d = await fog.detail('fest_yuelao');
+        const names = new Set(d.rows.map(r => r.cells[0]));
+        const ok = !!c && !c.any && c.bottom === '✋ 手動' && d.ok && names.size === 13 && d.rows.some(r => r.manual === 0)
+            && d.rows.filter(r => r.add).length === 11 && d.geo.marks.length === 13 && d.geo.marks.filter(x => x[3]).length === 2;
+        return res(ok, `重慶寺 ${c ? '蓋章（手動）' : '沒有'}；明細 ${names.size} 間、可加入 ${d.rows.filter(r => r.add).length}（應為 11）、地圖紅點 ${d.geo.marks.filter(x => x[3]).length}（應為 2）`);
+    });
+    await check('民俗活動', '分享成就與動圖：兩張集章卡都畫得出來、子項目可以單獨關掉', async () => {
+        const s = await fog.compute(synth([at('2019-12-01 19:30'), ylAt('tianhou'), ylAt('lukang')]), 'visit');
+        const env = { stats: s, meta: {}, maps: {} };
+        const o = { blocks: new Set(['festival']), missing: new Set(), hideDates: false, nickname: '', mapLevel: 'town' };
+        const both = renderReport(o, env).height;
+        const one = renderReport(o, { ...env, stats: await fog.compute(synth([at('2019-12-01 19:30')]), 'visit') }).height;
+        const gif = renderFestivalGif(o, env);
+        // 進階選項：子項目關掉月老巡禮 → 和只有耶誕城一樣高；兩張都關 → 不畫、沒有動圖
+        const subs = subsOf('festival', s).map(x => x.key).join(',');
+        const offYl = renderReport({ ...o, subOff: { festival: ['fest_yuelao'] } }, env).height;
+        const offAll = { ...o, subOff: { festival: ['fest_yuelao', 'fest_xmas_ntpc'] } };
+        const noGif = renderFestivalGif(offAll, env);
+        return res(both > one + 300 && !!gif && gif.size > 1000 && subs === 'fest_xmas_ntpc,fest_yuelao' && offYl === one && !noGif && renderReport(offAll, env).height < one,
+            `兩張 ${both} px、只有耶誕城 ${one} px、關掉月老巡禮 ${offYl} px；子項目 ${subs}；動圖 ${gif ? Math.round(gif.size / 1024) + ' KB' : '沒有'}、全關 ${noGif ? '仍有動圖' : '沒有動圖'}`);
     });
 
     // ---------- 備份 ----------

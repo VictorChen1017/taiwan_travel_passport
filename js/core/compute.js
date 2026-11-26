@@ -311,14 +311,19 @@ export function compute(R, S, opts = {}) {
         }
     }
 
-    // ---------- 節慶活動（年份集點卡；一年都沒去過就不列出） ----------
+    // ---------- 節慶與民俗活動（集章卡；一個章都沒有就不列出） ----------
+    // 每個章（cells，新到舊）：top／label／bottom＝戳章上中下的字，date＝最早時間，auto＝自動紀錄的最早時間，manual＝手動紀錄編號
 
     const festCells = {};
     for (const f of cfg.festivals || []) {
-        const cells = festYears(f, R, T, now, pts, manualPlace.get(f.id), i => isManual({ K, REF }, i));
+        const manualOf = i => isManual({ K, REF }, i);
+        const cells = f.kind === 'places' ? festPlaces(f, T, pts, manualOf) : festYears(f, R, T, now, pts, manualPlace.get(f.id), manualOf);
         festCells[f.id] = cells;
         if (!cells.length) continue;
-        add(f.id, 'festival', f.name, f.desc, f.icon, f.tier, 1, 1, cells[cells.length - 1].date, { cells, detail: true, scene: f.scene, stamp: f.stamp });   // 日期＝第一次去的那一年
+        const summary = f.kind === 'places' ? `已參拜 ${cells.length} / ${f.places.length} 間` : `已去過 ${cells.length} 年`;
+        const dates = cells.map(c => c.date).filter(t => t !== null);
+        add(f.id, 'festival', f.name, f.desc, f.icon, f.tier, 1, 1, dates.length ? Math.min(...dates) : null,   // 日期＝第一個章
+            { cells, detail: true, scene: f.scene, kind: f.kind, summary });
     }
 
     // ---------- 旅行 ----------
@@ -404,7 +409,7 @@ export function detail(ctx, id) {
     const a = ctx.achievements.find(x => x.id === id);
     if (!a || !a.detail) return { ok: false, error: '這個成就沒有明細' };
     const tr = S.achievements.travel;
-    let rows = [], columns = [], note = null, geo = null, addInfo = null;
+    let rows = [], columns = [], note = null, geo = null, addInfo = null, nameFirst = false;
 
     if (id === 'road_trip' || id === 'multi_town') {
         const isTrip = id === 'road_trip';
@@ -482,8 +487,29 @@ export function detail(ctx, id) {
         note = isPeak ? `已登頂 ${done} / ${cells.length} 座；地圖紅點為已登頂、灰點為未登頂；未登頂的山可以手動加入`
                       : `已到站 ${done} / ${cells.length} 站；地圖紅點為已到站、灰點為未到站；未到的車站可以手動加入`;
         geo = { marks: cells.map(c => [c.lat, c.lng, isPeak ? `#${c.code} ${c.name}` : c.name, c.done, c.code]) };   // code：手動加入時預先帶入
+    } else if (ctx.festCells[id] && S.achievements.festivals.find(x => x.id === id).kind === 'places') {
+        // 地點型集章：每個地點一列（未蓋章的可手動加入；手動紀錄另列，可刪除）；小地圖標出全部地點
+        const f = S.achievements.festivals.find(x => x.id === id);
+        const got = new Map(ctx.festCells[id].map(c => [c.code, c]));
+        columns = ['地點', '首次造訪'];
+        nameFirst = true;
+        for (const p of f.places) {
+            const label = `${p.name}（${p.region}）`, c = got.get(p.code);
+            if (!c) {
+                rows.push({ date: -1, value: 0, hit: false, cells: [label, '尚未造訪'],
+                            add: { target: `${id}#${p.code}`, label: p.name, lat: p.lat, lng: p.lng, area: false } });
+                continue;
+            }
+            if (c.any) rows.push({ date: c.auto ?? 0, value: 1, hit: true, cells: [label, c.auto ? ymd(c.auto) : '時間不明'] });
+            for (const i of c.manual) {
+                const t = T(i);
+                rows.push({ date: t ?? 0, value: 1, hit: true, cells: [label, `✋ ${t ? ymd(t) : '日期不明'}`], manual: ctx.REF[i] });
+            }
+        }
+        note = `已造訪 ${got.size} / ${f.places.length} 間；地圖紅點為已造訪、灰點為未造訪；未造訪的可以手動加入`;
+        geo = { marks: f.places.map(p => [p.lat, p.lng, p.name, got.has(p.code), null]) };
     } else if (ctx.festCells[id]) {
-        // 節慶活動：每年一列（手動紀錄另列，可刪除）；可手動加入還沒蓋章的年份
+        // 年份型集章：每年一列（手動紀錄另列，可刪除）；可手動加入還沒蓋章的年份
         const f = S.achievements.festivals.find(x => x.id === id);
         const cells = ctx.festCells[id];
         columns = ['年份', '時間'];
@@ -542,7 +568,7 @@ export function detail(ctx, id) {
 
     const sort = id === 'regular' ? 'value' : 'date';
     rows.sort((x, y) => y[sort] - x[sort]);
-    return { ok: true, id, name: a.name, desc: a.desc, sort, columns, rows, note, geo, add: addInfo };
+    return { ok: true, id, name: a.name, desc: a.desc, sort, columns, rows, note, geo, add: addInfo, nameFirst };
 }
 
 /**
@@ -595,8 +621,34 @@ function festYears(f, R, T, now, pts, manualIdx, isManualRec, hits = null) {
     for (const c of by.values()) {
         c.date = c.auto;
         for (const i of c.manual) c.date = minNull(c.date, T(i));
+        Object.assign(c, { top: f.stamp_top || '', label: String(c.year), bottom: c.auto ? '' : '✋ 手動' });
     }
     return [...by.values()].sort((a, b) => b.year - a.year);
+}
+
+/**
+ * 地點型集章（月老巡禮）：每個地點 radius 內有足跡就蓋章（不限時間；手動紀錄為 kind 3，target 為「id#代號」）
+ * @returns 有蓋章的地點（新到舊；時間不明的排最後）[{ code, name, region, top, label, bottom, date, auto, any, manual }]
+ *          auto＝自動紀錄的最早時間；any＝有自動紀錄（時間可能不明）
+ */
+function festPlaces(f, T, pts, isManualRec) {
+    const out = [];
+    for (const p of f.places) {
+        let auto = null, any = false;
+        const manual = [];
+        pts.around(p.lat, p.lng, f.radius, i => {
+            if (isManualRec(i)) { manual.push(i); return; }
+            any = true;
+            const t = T(i);
+            if (t !== null) auto = minNull(auto, t);
+        });
+        if (!any && !manual.length) continue;
+        let date = auto;
+        for (const i of manual) date = minNull(date, T(i));
+        out.push({ code: p.code, name: p.name, region: p.region, top: p.region, label: p.short, bottom: any ? '' : '✋ 手動',
+                   date, auto, any, manual });
+    }
+    return out.sort((a, b) => (b.date ?? -Infinity) - (a.date ?? -Infinity));
 }
 
 /** 地點範圍內的紀錄編號 */
