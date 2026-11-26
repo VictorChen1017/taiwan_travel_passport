@@ -12,7 +12,7 @@
 // 與原專案的差異：不顯示照片數；每年新解鎖改為自繪 SVG（不用 Plotly）
 // 所需套件：Leaflet（成就明細的小地圖；沒有載入時不顯示地圖）
 
-import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor, CONQUER_LEVELS, conquerColor } from './shared.js';
+import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor, PLAY_NOW_COLOR, PLAY_PAST_COLOR, CONQUER_LEVELS, conquerColor } from './shared.js';
 import { TILE } from './tiles.js';
 import { TOUCH } from './device.js';
 import { sceneSvg, sceneEmoji, stampTilt } from './scenes.js';
@@ -113,7 +113,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 <div class="ex-card ex-mapcard" id="ex-mapcard">
                     <div class="ex-card-title">迷霧小地圖 <small id="ex-map-note"></small></div>
                     <div id="ex-legend" class="ex-legend"></div>
-                    <div class="ex-mapwrap" id="ex-mapwrap" role="button" tabindex="0" title="點擊放大">
+                    <div class="ex-mapwrap" id="ex-mapwrap" role="button" tabindex="0" aria-label="點擊放大迷霧地圖">
                         <svg id="ex-map" class="ex-map" preserveAspectRatio="xMidYMid meet"></svg>
                         <div id="ex-map-loading" class="ex-map-loading">載入地圖中…</div>
                         <div id="ex-village-open" class="ex-village-open" hidden>
@@ -125,17 +125,17 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                         <span class="ex-zoom-hint">🔍 點擊放大</span>
                     </div>
                 </div>
-                <div class="ex-card ex-progress ex-card-link" id="ex-progress-card" role="button" tabindex="0" title="點擊看明細">
+                <div class="ex-card ex-progress ex-card-link" id="ex-progress-card" role="button" tabindex="0" aria-label="探索率，點擊看明細">
                     <div class="ex-card-title">探索率 <small>點擊看明細 ›</small></div>
                     <div id="ex-donut" class="ex-donut"></div>
                     <div id="ex-progress-sub" class="ex-progress-sub"></div>
                 </div>
-                <div class="ex-card ex-recent ex-card-link" id="ex-recent-card" role="button" tabindex="0" title="點擊看完整解鎖順序">
+                <div class="ex-card ex-recent ex-card-link" id="ex-recent-card" role="button" tabindex="0" aria-label="最近解鎖，點擊看完整解鎖順序">
                     <div class="ex-card-title">最近解鎖 <small id="ex-recent-more">點擊看完整順序 ›</small></div>
                     <ol id="ex-recent" class="ex-recent-list"></ol>
                 </div>
-                <div class="ex-card ex-yearly" id="ex-yearly-card">
-                    <div class="ex-card-title" id="ex-yearly-title">每年新解鎖</div>
+                <div class="ex-card ex-yearly ex-card-link" id="ex-yearly-card" role="button" tabindex="0" aria-label="每年新解鎖，點擊看足跡擴張的動畫">
+                    <div class="ex-card-title"><span id="ex-yearly-title">每年新解鎖</span> <small>點擊看今年的地圖動畫，點長條看那一年 ›</small></div>
                     <div id="ex-yearly" class="ex-yearly-chart"></div>
                 </div>
             </div>
@@ -176,6 +176,12 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             sec.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
         });
         cardLink('#ex-recent-card', openOrder);
+        // 每年新解鎖：點長條 → 放大地圖播放動畫（村里單位用村里，其他用鄉鎮）停在那一年；點卡片其他地方 → 停在今年（資料沒到今年就停在最後一年）
+        cardLink('#ex-yearly-card', e => {
+            const col = e && e.target.closest && e.target.closest('.ex-ychart-col');
+            const at = col ? (col.dataset.k === 'early' ? 'early' : +col.dataset.k) : new Date().getFullYear();
+            openModal(false, { level: state.unit === 'village' ? 'village' : 'town', playAt: at });   // 縣市沒有動畫，改用鄉鎮
+        });
         bindDetailTip();
         let rt = null;
         window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => state.data && renderYearly(), 150); });
@@ -346,9 +352,9 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (!years.length) { box.innerHTML = '<div class="ex-empty">尚無資料</div>'; return; }
         // 2015 年以前的零星紀錄合併成一欄，避免拉出一長串空白年份
         const early = years.filter(y => y < EARLY_YEAR).reduce((s, y) => s + byYear.get(y), 0);
-        const labels = [], vals = [];
-        if (early) { labels.push(`${EARLY_YEAR} 前`); vals.push(early); }
-        for (let y = Math.max(years[0], EARLY_YEAR); y <= years[years.length - 1]; y++) { labels.push(String(y)); vals.push(byYear.get(y) || 0); }
+        const labels = [], vals = [], keys = [];   // keys：點長條時要停的年份（early＝2015 前合併欄）
+        if (early) { labels.push(`${EARLY_YEAR} 前`); vals.push(early); keys.push('early'); }
+        for (let y = Math.max(years[0], EARLY_YEAR); y <= years[years.length - 1]; y++) { labels.push(String(y)); vals.push(byYear.get(y) || 0); keys.push(y); }
         let acc = 0;
         const cum = vals.map(v => (acc += v));
         const fmtV = v => v.toLocaleString(undefined, { maximumFractionDigits: byArea ? 1 : 0 });
@@ -375,7 +381,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             ${ticks.map(t => `<line x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih - t * ih}" y2="${m.t + ih - t * ih}" class="ex-ychart-grid"/>
                 <text x="${m.l - 6}" y="${m.t + ih - t * ih + 4}" text-anchor="end" class="ex-ychart-tick">${cFmt(+(yMax * t).toFixed(2))}</text>
                 <text x="${W - m.r + 6}" y="${m.t + ih - t * ih + 4}" class="ex-ychart-tick">${cFmt(+(cMax * t).toFixed(2))}</text>`).join('')}
-            ${vals.map((v, i) => `<g class="ex-ychart-col"><title>${labels[i]}：${fmtV(v)} ${unitText}（累積 ${fmtV(cum[i])}）</title>
+            ${vals.map((v, i) => `<g class="ex-ychart-col" data-k="${keys[i]}"><title>${labels[i]}：${fmtV(v)} ${unitText}（累積 ${fmtV(cum[i])}）・點擊看那一年的地圖動畫</title>
                 <rect x="${m.l + bw * i}" y="${m.t}" width="${bw}" height="${ih}" class="ex-ychart-hit"/>
                 <rect x="${(x(i) - bw * 0.36).toFixed(1)}" y="${yL(v).toFixed(1)}" width="${(bw * 0.72).toFixed(1)}" height="${(m.t + ih - yL(v)).toFixed(1)}" style="fill:#ff8a5c" rx="2"/></g>`).join('')}
             <polyline points="${cum.map((v, i) => `${x(i).toFixed(1)},${yR(v).toFixed(1)}`).join(' ')}" class="ex-ychart-line"/>
@@ -642,13 +648,18 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         // 顏色來自 CSS：未解鎖 --map-off（不透明度 0.75；小地圖、彈窗不同）、界線 --c-surface、海岸線 --c-map-coast
         ctx.fillStyle = v('--map-off');
         ctx.globalAlpha = 0.75;
-        for (const x of vis) if (!cv.fills.has(x.code)) ctx.fill(x.p2d);
+        // cv.dim（村里播放動畫：選的縣市以外）：只畫很淡的底，不上色
+        const dim = cv.dim;
+        for (const x of vis) if (!cv.fills.has(x.code) && !(dim && dim.has(x.code))) ctx.fill(x.p2d);
+        if (dim) { ctx.globalAlpha = 0.22; for (const x of vis) if (dim.has(x.code)) ctx.fill(x.p2d); }
         ctx.globalAlpha = 1;
-        for (const x of vis) { const f = cv.fills.get(x.code); if (f) { ctx.fillStyle = f; ctx.fill(x.p2d); } }
+        for (const x of vis) { const f = cv.fills.get(x.code); if (f && !(dim && dim.has(x.code))) { ctx.fillStyle = f; ctx.fill(x.p2d); } }
         ctx.lineJoin = 'round';
-        ctx.strokeStyle = v('--c-surface');
-        ctx.lineWidth = (cv.fine ? 0.25 : 0.6) * s;   // 線寬固定為螢幕上的像素數（不隨縮放變粗）
-        for (const x of vis) ctx.stroke(x.p2d);
+        if (!cv.noLines) {   // cv.noLines（村里播放動畫）：不畫區域界線，只留下方的縣市界
+            ctx.strokeStyle = v('--c-surface');
+            ctx.lineWidth = (cv.fine ? 0.25 : 0.6) * s;   // 線寬固定為螢幕上的像素數（不隨縮放變粗）
+            for (const x of vis) ctx.stroke(x.p2d);
+        }
         // 水系（只有放大彈窗有 svg._water）：河川、水庫湖泊填色，再描一圈同色細線，窄的河段縮小時才不會斷掉
         const water = svg._water && waterOn() && svg._water.filter(x => x.box[2] >= mx0 && x.box[0] <= mx1 && x.box[3] >= my0 && x.box[1] <= my1);
         if (water && water.length) {
@@ -859,17 +870,34 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                     <span class="ex-modal-regions" role="group" aria-label="地區">${Object.entries(REGIONS).map(([k, r]) =>
                         `<button type="button" data-region="${k}">${r.label}</button>`).join('')}</span>
                     <span class="ex-modal-tools">
-                        <button type="button" data-act="in" title="放大">＋</button>
-                        <button type="button" data-act="out" title="縮小">－</button>
-                        <button type="button" data-act="water" class="ex-modal-water" aria-pressed="${waterOn()}" title="顯示河川、水庫與湖泊" aria-label="顯示河川、水庫與湖泊">💧</button>
-                        <button type="button" data-act="reset" title="縮放回本島全圖（不會刪除任何資料）">全圖</button>
                         <button type="button" data-act="close" class="ex-modal-x" title="關閉（Esc）">✕</button>
                     </span>
                 </div>
                 <div class="ex-modal-body">
                     <svg class="ex-map ex-modal-map" preserveAspectRatio="xMidYMid meet"></svg>
+                    <!-- 地圖上的按鈕：縮放、河川、全圖在右上角由上往下；播放動畫在右下角 -->
+                    <span class="ex-modal-tools ex-map-ctrls">
+                        <button type="button" data-act="in" title="放大" aria-label="放大">＋</button>
+                        <button type="button" data-act="out" title="縮小" aria-label="縮小">－</button>
+                        <button type="button" data-act="water" class="ex-modal-water" aria-pressed="${waterOn()}" title="顯示河川、水庫與湖泊" aria-label="顯示河川、水庫與湖泊">💧</button>
+                        <button type="button" data-act="reset" title="縮放回本島全圖（不會刪除任何資料）">全圖</button>
+                    </span>
+                    <span class="ex-modal-tools ex-map-playbtn">
+                        <button type="button" data-act="play" class="ex-modal-play" aria-pressed="false" title="依首次解鎖時間逐年（或逐月）播放迷霧散開的動畫" hidden>▶ 播放動畫</button>
+                    </span>
                     <div class="ex-map-loading">載入地圖中…</div>
                     <div class="ex-tip" hidden></div>
+                    <div class="ex-play-stamp" hidden aria-live="polite"><b></b><span></span></div>
+                </div>
+                <div class="ex-play" hidden>
+                    <button type="button" data-act="play-toggle" class="ex-play-btn" aria-label="播放">▶</button>
+                    <input type="range" class="ex-play-range" min="0" max="0" step="1" value="0" aria-label="時間">
+                    <select class="ex-play-county" aria-label="縣市（依解鎖村里數多到少排）" hidden></select>
+                    <span class="ex-seg ex-play-seg" role="group" aria-label="時間刻度">
+                        <button type="button" data-pmode="year">每年</button><button type="button" data-pmode="month">每月</button></span>
+                    <span class="ex-seg ex-play-seg" role="group" aria-label="播放速度">
+                        <button type="button" data-pspeed="1">1×</button><button type="button" data-pspeed="2">2×</button><button type="button" data-pspeed="3">3×</button></span>
+                    <button type="button" data-act="play-exit" class="ex-play-exit">結束播放</button>
                 </div>
                 <div class="ex-legend ex-modal-legend"></div>
             </div>`;
@@ -950,6 +978,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             modal.querySelectorAll('[data-region]').forEach(x => x.classList.toggle('active', x.dataset.region === k));
         };
         svg._goRegion = goRegion;
+        svg._setVb = setVb;   // 村里播放動畫縮放到縣市
         svg.addEventListener('wheel', e => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.25 : 0.8, e.clientX, e.clientY); }, { passive: false });
         // 觸控的連點自己判斷（下方 pointerup）；有些瀏覽器觸控也會送 dblclick，略過以免放大兩次
         let lastType = 'mouse';
@@ -1042,23 +1071,43 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 if (svg._cv) paintCanvas(svg);
             }
             else if (ds.region) goRegion(ds.region);
+            else if (act === 'play') { if (play) exitPlay(); else startPlay(0, true); }
+            else if (act === 'play-toggle') togglePlay();
+            else if (act === 'play-exit') exitPlay();
+            else if (ds.pmode && play && ds.pmode !== play.mode) setPlayMode(ds.pmode);
+            else if (ds.pspeed && play) { play.speed = +ds.pspeed; syncPlayBar(); if (play.timer) schedule(); }
         });
-        document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+        modal.querySelector('.ex-play-range').addEventListener('input', e => { pausePlay(); goFrame(+e.target.value); });
+        modal.querySelector('.ex-play-county').addEventListener('change', e => { if (play) setPlayCounty(e.target.value); });
+        document.addEventListener('keydown', e => {
+            if (modal.hidden) return;
+            if (e.key === 'Escape') closeModal();
+            // 播放中：左右鍵前後一格（拉桿有焦點時由它自己處理）
+            else if (play && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !(e.target.closest && e.target.closest('input, textarea, select'))) {
+                e.preventDefault();
+                pausePlay();
+                goFrame(play.i + (e.key === 'ArrowLeft' ? -1 : 1));
+            }
+        });
     }
 
     // keep：彈窗開著時資料更新（例如剛補點）：保留縮放位置，重新固定原本的泡泡
-    async function openModal(keep = false) {
+    // opts.level：指定層級（預設跟頁面上方的單位）；opts.playAt：開啟後停在逐年播放的這一年（'early'＝2015 前）
+    async function openModal(keep = false, opts = {}) {
         if (!modal) buildModal();
-        const level = state.unit;
+        keep = keep === true;   // 直接當事件處理函式時第一個參數是事件
         const svg = modal.querySelector('svg');
+        const level = opts.level || (keep && svg._level) || state.unit;
         const prev = keep && svg._level === level && svg._vb ? { vb: svg._vb, pin: svg._pin } : null;
         const loading = modal.querySelector('.ex-map-loading');
         modal.querySelector('.ex-modal-title').textContent = `迷霧地圖・${UNIT_LABEL[level]}`;
+        modal.querySelector('.ex-modal-play').hidden = !PLAY_LEVELS.has(level);   // 播放動畫：鄉鎮、村里（縣市太粗）
         modal.querySelector('.ex-tip').hidden = true;
         modal.hidden = false;
         document.body.classList.add('ex-modal-open');
         if (svg._level === level && svg._data === state.data) {   // 已畫過同一層級與資料，保留縮放位置
-            if (svg._color !== (useConquer(level) ? 'count' : 'year')) recolorModal();
+            if (!play && svg._color !== (useConquer(level) ? 'count' : 'year')) await recolorModal();
+            afterOpen(opts);
             return;
         }
         if (!prev) svg.innerHTML = '';
@@ -1083,6 +1132,231 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         loadWater(svg);
         const el = prev && prev.pin && findEl(svg, prev.pin.code);
         if (el) svg._showTip(el, prev.pin.x, prev.pin.y, true);
+        afterOpen(opts);
+    }
+    // 開好地圖之後：播放中（例如剛補點、資料重算）照目前的格子重畫；有指定年份就進入播放並停在那一年
+    function afterOpen(opts) {
+        if (play) { if (modal.querySelector('svg')._level === play.level) rebuildPlay(); else exitPlay(); }
+        else if (opts.playAt !== undefined && opts.playAt !== null) startPlay(opts.playAt, false);
+    }
+
+    // ---------- 放大地圖：逐年／逐月播放動畫（鄉鎮、村里） ----------
+    // 依首次解鎖時間一格一格顯示，只用兩色（資訊才不會太雜）：之前已解鎖 PLAY_PAST_COLOR（淺橘）、這一格新解鎖 PLAY_NOW_COLOR（橘，直接出現）、之後的維持迷霧；沒有日期的不顯示
+    // 一年一格停 1 秒、一月一格停 0.5 秒（2×、3× 依倍數縮短）；2015 年以前合併成一格。每次打開都是每月、1×（2026-11-27 維護者要求，不記上次的選擇）
+    // 村里：預設只看解鎖村里最多的縣市（地圖縮放到該縣市、其他縣市淡灰不上色），可切換縣市或全島；播放時不畫村里界線，只留縣市界，解鎖的村里比較明顯
+    const PLAY_LEVELS = new Set(['town', 'village']);
+    let play = null;   // { level, county（村里：縣市代碼或 'all'）, mode, speed, frames, i, timer, dim }
+    const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const utc = (y, m = 0) => Date.UTC(y, m, 1) / 1000;
+    // 村里動畫的縣市範圍：村里代碼前 5 碼是縣市代碼；臺北、新北、基隆連在一起，合成「北北基」一組；新竹、嘉義縣市各合成一組（2026-11-27 維護者要求）
+    const COUNTY_GROUPS = {
+        nnk: { name: '北北基', codes: ['63000', '65000', '10017'] },
+        hsinchu: { name: '新竹縣市', codes: ['10004', '10018'] },
+        chiayi: { name: '嘉義縣市', codes: ['10010', '10020'] },
+    };
+    const GROUP_OF = new Map(Object.entries(COUNTY_GROUPS).flatMap(([k, g]) => g.codes.map(c => [c, k])));
+    const countyOf = code => { const c = code.slice(0, 5); return GROUP_OF.get(c) || c; };
+    const scopeName = k => COUNTY_GROUPS[k]?.name || state.idx.county.get(k)?.name || k;
+    /** 這次播放範圍內有日期的已解鎖區域 */
+    function playItems() {
+        if (play.level === 'town') return [...state.idx.town.values()].filter(t => t.unlocked && t.first);
+        return [...state.idx.village.values()].filter(v => v.first && (play.county === 'all' || countyOf(v.code) === play.county));
+    }
+    /** 有解鎖村里的縣市，依解鎖村里數多到少：[[代碼, 個數]] */
+    function villageCounties() {
+        const n = new Map();
+        for (const v of state.idx.village.values()) if (v.first) n.set(countyOf(v.code), (n.get(countyOf(v.code)) || 0) + 1);
+        return [...n].sort((a, b) => b[1] - a[1]);
+    }
+    /** 播放格子：[{ key, label, start, end, n }]，start ≤ first < end 算這一格新解鎖 */
+    function playFrames(mode) {
+        const ts = playItems().map(t => t.first);
+        if (!ts.length) return [];
+        const d0 = new Date(Math.min(...ts) * 1000), d1 = new Date(Math.max(...ts) * 1000);
+        const frames = [];
+        const early = d0.getUTCFullYear() < EARLY_YEAR;
+        if (early) frames.push({ key: 'early', label: `${EARLY_YEAR} 年前`, start: -Infinity, end: utc(EARLY_YEAR) });
+        if (mode === 'year') {
+            for (let y = Math.max(EARLY_YEAR, d0.getUTCFullYear()); y <= d1.getUTCFullYear(); y++)
+                frames.push({ key: y, label: `${y} 年`, start: utc(y), end: utc(y + 1) });
+        } else {
+            // 每月：從 2015 年以後第一筆的月份開始
+            const s = new Date(Math.min(...ts.filter(t => t >= utc(EARLY_YEAR))) * 1000);
+            if (!isNaN(s)) for (let y = s.getUTCFullYear(), m = s.getUTCMonth(); utc(y, m) <= d1.getTime() / 1000; m === 11 ? (y++, m = 0) : m++)
+                frames.push({ key: y, label: `${y} 年 ${m + 1} 月`, start: utc(y, m), end: utc(y, m + 1) });
+        }
+        // 第一格：還沒解鎖任何區域（第一筆資料的前一年；每月且沒有 2015 前那格時是前一個月），動畫從全是迷霧開始
+        if (frames.length) {
+            const f0 = frames[0], y = d0.getUTCFullYear();
+            let label = `${y - 1} 年`;
+            if (mode === 'month' && f0.key !== 'early') { const p = new Date((f0.start - 1) * 1000); label = `${p.getUTCFullYear()} 年 ${p.getUTCMonth() + 1} 月`; }
+            frames.unshift({ key: 'start', label, start: -Infinity, end: -Infinity });
+        }
+        for (const f of frames) f.n = ts.filter(t => t >= f.start && t < f.end).length;
+        return frames;
+    }
+    // at：格子索引，或年份／'early'（找那一年的第一格；超出範圍取最近的一格）
+    function frameIndex(frames, at) {
+        if (typeof at === 'number' && at < 1000) return Math.max(0, Math.min(frames.length - 1, at));
+        let i = frames.findIndex(f => f.key === at);
+        if (i < 0) i = at === 'early' ? 0 : frames.findIndex(f => typeof f.key === 'number' && f.key >= at);
+        return i < 0 ? frames.length - 1 : i;
+    }
+    /** 重新切格子（換刻度、換縣市、資料更新），停在差不多的時間：回傳格子索引；沒有資料回傳 -1 */
+    function reframe() {
+        const cur = play.frames[play.i];
+        play.frames = playFrames(play.mode);
+        if (!play.frames.length) return -1;
+        if (!cur) return play.frames.length - 1;
+        if (cur.key === 'start') return 0;
+        if (cur.key === 'early' || play.mode === 'year') return frameIndex(play.frames, cur.key);
+        const i = play.frames.findIndex(f => f.key !== 'start' && f.end > cur.start);   // 每年 → 那一年的第一個月
+        return i < 0 ? play.frames.length - 1 : i;
+    }
+    function startPlay(at, auto) {
+        const svg = modal.querySelector('svg');
+        if (!PLAY_LEVELS.has(svg._level)) return;
+        // 從長條圖進來的 at 是年份：停在那一年的第一個月
+        play = { level: svg._level, county: 'all', mode: 'month', speed: 1, frames: [], i: 0, timer: 0, dim: null };
+        if (play.level === 'village') {
+            const list = villageCounties();
+            play.county = list.length ? list[0][0] : 'all';
+            fillCountySelect(list);
+        }
+        modal.querySelector('.ex-play-county').hidden = play.level !== 'village';
+        play.frames = playFrames(play.mode);
+        if (!play.frames.length) { play = null; return; }
+        modal.querySelector('.ex-play').hidden = false;
+        modal.querySelector('.ex-play-stamp').hidden = false;
+        modal.querySelector('.ex-modal-play').setAttribute('aria-pressed', 'true');
+        modal.querySelector('.ex-modal-legend').innerHTML = playLegend();
+        focusCounty();
+        goFrame(frameIndex(play.frames, at));
+        if (auto && !reduceMotion()) schedule();   // 減少動態效果：不自動播放，可以手動按 ▶ 或拖拉桿
+        syncPlayBar();
+    }
+    function exitPlay() {
+        if (!play) return;
+        clearTimeout(play.timer);
+        play = null;
+        modal.querySelector('.ex-play').hidden = true;
+        modal.querySelector('.ex-play-stamp').hidden = true;
+        modal.querySelector('.ex-modal-play').setAttribute('aria-pressed', 'false');
+        recolorModal();   // 回到原本的上色、界線與圖例
+    }
+    // 資料更新後重新切格子，停在同一個時間
+    function rebuildPlay() {
+        if (play.level === 'village') {
+            const list = villageCounties();
+            if (play.county !== 'all' && !list.some(([c]) => c === play.county)) play.county = list.length ? list[0][0] : 'all';
+            fillCountySelect(list);
+            focusCounty(false);
+        }
+        const i = reframe();
+        if (i < 0) { exitPlay(); return; }
+        modal.querySelector('.ex-modal-legend').innerHTML = playLegend();
+        goFrame(i);
+    }
+    function setPlayMode(mode) {
+        play.mode = mode;
+        const i = reframe();
+        modal.querySelector('.ex-modal-legend').innerHTML = playLegend();   // 「這一年／這個月新解鎖」
+        goFrame(i < 0 ? 0 : i);
+        if (play.timer) schedule();
+        syncPlayBar();
+    }
+    function setPlayCounty(county) {
+        play.county = county;
+        focusCounty();
+        const i = reframe();
+        if (i < 0) return;
+        goFrame(i);
+        if (play.timer) schedule();
+    }
+    function fillCountySelect(list) {
+        const sel = modal.querySelector('.ex-play-county');
+        sel.innerHTML = list.map(([c]) => `<option value="${c}">${esc(scopeName(c))}</option>`).join('')
+            + '<option value="all">全島</option>';
+        sel.value = play.county;
+    }
+    // 村里：縮放到選的縣市，其他縣市淡灰；全島回到本島全圖。move＝false 只更新淡灰範圍（資料更新時不動畫面）
+    function focusCounty(move = true) {
+        const svg = modal.querySelector('svg');
+        if (play.level !== 'village' || !svg._cv) { play.dim = null; return; }
+        if (play.county === 'all') {
+            play.dim = null;
+            if (move) svg._goRegion(DEFAULT_REGION);
+            return;
+        }
+        play.dim = new Set();
+        // 縮放範圍只算本島框內的村里：基隆的北方三島（彭佳嶼等）在本島框外，不讓畫面被拉走；
+        // 整個縣市都在框外（金門、連江）才用全部
+        const main = regionBox(REGIONS.main.box);
+        const inMain = b => (b[0] + b[2]) / 2 >= main.x && (b[0] + b[2]) / 2 <= main.x + main.w && (b[1] + b[3]) / 2 >= main.y && (b[1] + b[3]) / 2 <= main.y + main.h;
+        const own = svg._cv.items.filter(x => countyOf(x.code) === play.county);
+        for (const x of svg._cv.items) if (countyOf(x.code) !== play.county) play.dim.add(x.code);
+        const boxes = own.some(x => inMain(x.box)) ? own.filter(x => inMain(x.box)) : own;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const x of boxes) { x0 = Math.min(x0, x.box[0]); y0 = Math.min(y0, x.box[1]); x1 = Math.max(x1, x.box[2]); y1 = Math.max(y1, x.box[3]); }
+        if (move && x0 < x1) {
+            const px = (x1 - x0) * 0.06, py = (y1 - y0) * 0.06;
+            svg._showTip(null);
+            svg._setVb({ x: x0 - px, y: y0 - py, w: x1 - x0 + px * 2, h: y1 - y0 + py * 2 });
+            modal.querySelectorAll('[data-region]').forEach(b => b.classList.remove('active'));
+        }
+    }
+    function schedule() {
+        clearTimeout(play.timer);
+        if (play.i >= play.frames.length - 1) goFrame(0);   // 在最後一格按播放：從頭開始
+        const wait = (play.mode === 'year' ? 1000 : 500) / play.speed;
+        play.timer = setTimeout(function tick() {
+            if (!play) return;
+            goFrame(play.i + 1);
+            if (play.i < play.frames.length - 1) play.timer = setTimeout(tick, wait);
+            else { play.timer = 0; syncPlayBar(); }   // 播完停在最後一格（完整的地圖）
+        }, wait);
+        syncPlayBar();
+    }
+    function pausePlay() { if (play && play.timer) { clearTimeout(play.timer); play.timer = 0; syncPlayBar(); } }
+    function togglePlay() { if (!play) return; if (play.timer) pausePlay(); else schedule(); }
+    function syncPlayBar() {
+        if (!play) return;
+        const bar = modal.querySelector('.ex-play');
+        const btn = bar.querySelector('.ex-play-btn');
+        btn.textContent = play.timer ? '⏸' : '▶';
+        btn.setAttribute('aria-label', play.timer ? '暫停' : '播放');
+        const r = bar.querySelector('.ex-play-range');
+        r.max = play.frames.length - 1;
+        r.value = play.i;
+        bar.querySelectorAll('[data-pmode]').forEach(b => b.classList.toggle('active', b.dataset.pmode === play.mode));
+        bar.querySelectorAll('[data-pspeed]').forEach(b => b.classList.toggle('active', +b.dataset.pspeed === play.speed));
+    }
+    const playLegend = () => `<span class="ex-legend-item"><i class="sw fog"></i>未解鎖（迷霧）</span>
+        <span class="ex-legend-item"><i class="sw lv" style="background:${PLAY_PAST_COLOR}"></i>之前已解鎖</span>
+        <span class="ex-legend-item"><i class="sw lv" style="background:${PLAY_NOW_COLOR}"></i>這${play.mode === 'year' ? '一年' : '個月'}新解鎖</span>
+        <span class="ex-legend-item ex-play-note">沒有日期的紀錄不顯示</span>`;
+    // 換格直接換色（2026-11-27 維護者回饋：淡入看起來會閃一下，改為直接出現橘色）
+    function goFrame(i) {
+        const svg = modal.querySelector('svg');
+        if (!play || !svg._cv || svg._level !== play.level) return;
+        play.i = Math.max(0, Math.min(play.frames.length - 1, i));
+        const f = play.frames[play.i];
+        const fills = new Map();
+        let total = 0;
+        for (const t of playItems()) {
+            if (t.first >= f.end) continue;
+            total++;
+            fills.set(t.code, t.first >= f.start ? PLAY_NOW_COLOR : PLAY_PAST_COLOR);
+        }
+        svg._cv.fills = fills;
+        svg._cv.dim = play.dim;                        // 村里：其他縣市淡灰
+        svg._cv.noLines = play.level === 'village';    // 村里：不畫村里界線，只留縣市界
+        paintCanvas(svg);
+        const stamp = modal.querySelector('.ex-play-stamp');
+        const where = play.level === 'village' ? (play.county === 'all' ? '全島・' : `${scopeName(play.county)}・`) : '';
+        stamp.querySelector('b').textContent = f.label;
+        stamp.querySelector('span').textContent = `${where}＋${f.n.toLocaleString()} 個${UNIT_LABEL[play.level]}・累積 ${total.toLocaleString()} 個`;
+        syncPlayBar();
     }
 
     /**
@@ -1108,6 +1382,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
     }
 
     function closeModal() {
+        exitPlay();   // 下次打開回到一般地圖
         modal.hidden = true;
         document.body.classList.remove('ex-modal-open');
     }

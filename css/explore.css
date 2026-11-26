@@ -1400,6 +1400,136 @@ body.ex-modal-open {
     border-color: var(--c-accent);
 }
 
+.ex-modal-tools .ex-modal-play[aria-pressed="true"] {
+    color: var(--c-accent-strong);
+    background: var(--c-accent-soft);
+    border-color: var(--c-accent);
+}
+
+/* 放大地圖上的按鈕：縮放、河川、全圖在右上角由上往下；播放動畫在右下角（疊在地圖畫布之上、泡泡之下） */
+.ex-map-ctrls,
+.ex-map-playbtn {
+    position: absolute;
+    right: 10px;
+    z-index: 1;
+    margin: 0;
+}
+
+.ex-map-ctrls {
+    top: 10px;
+    flex-direction: column;
+}
+
+.ex-map-playbtn {
+    bottom: 10px;
+}
+
+.ex-map-ctrls button,
+.ex-map-playbtn button {
+    box-shadow: 0 1px 4px var(--c-shadow);
+}
+
+.ex-map-ctrls button {
+    min-width: 40px;
+    height: 36px;
+}
+
+.ex-map-playbtn button {
+    height: 36px;
+    font-weight: bold;
+}
+
+/* 逐年播放：地圖左上角的時間浮標、地圖下方的播放列 */
+.ex-play-stamp {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px var(--c-shadow);
+    pointer-events: none;
+}
+
+.ex-play-stamp b {
+    font-size: calc(22px * var(--fs, 1));
+    font-variant-numeric: tabular-nums;
+}
+
+.ex-play-stamp span {
+    font-size: calc(13px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.ex-play {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 10px;
+}
+
+.ex-play[hidden] {
+    display: none;
+}
+
+.ex-play-btn,
+.ex-play-exit {
+    height: 32px;
+    padding: 0 12px;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.ex-play-btn {
+    min-width: 44px;
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+}
+
+.ex-play-exit:hover {
+    background: var(--c-surface-3);
+}
+
+.ex-play-range {
+    flex: 1 1 200px;
+    min-width: 140px;
+    accent-color: var(--c-accent);
+}
+
+.ex-play-seg button {
+    min-width: 44px;
+}
+
+/* 村里播放動畫：縣市切換 */
+.ex-play-county {
+    height: 32px;
+    padding: 0 8px;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+}
+
+.ex-play-county[hidden] {
+    display: none;
+}
+
+.ex-play-note {
+    color: var(--c-text-faint);
+}
+
 .ex-modal-tools .ex-modal-x {
     font-size: calc(16px * var(--fs, 1));
 }
@@ -1820,6 +1950,10 @@ body.ex-modal-open {
 
 .ex-ychart-hit {
     fill: transparent;
+}
+
+.ex-ychart-col {
+    cursor: pointer;
 }
 
 .ex-ychart-col:hover .ex-ychart-hit {
