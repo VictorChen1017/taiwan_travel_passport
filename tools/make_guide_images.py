@@ -2,6 +2,8 @@
 # 原始截圖（iPhone 全螢幕截圖 946×2047；放在 test/，git 忽略，不公開）：
 #   時間軸教學 tl-ios-*：test/guide_src/1.jpg～8.jpg
 #   備份教學   bk-ios-*：test/guide_import/1.jpg～4.jpg
+# Android 全螢幕截圖（三星 1080×2340，深色模式）：
+#   時間軸教學 tl-and-*：test/guide_src_android/1 (2).jpg～4 (2).jpg
 # 用法：python tools/make_guide_images.py
 #
 # 個資一律「蓋掉」而不只是模糊：姓名、Email、地址、聯絡人、檔名、照片 → 實心色塊＋灰色示意圖形；
@@ -17,9 +19,13 @@ OUT = ROOT / 'img' / 'guide'
 ORANGE = (255, 77, 26)          # 同 css/theme.css 的 --c-accent（淺色）
 GHOST = (214, 218, 224)         # 示意圖形的灰
 WIDTH = 720                     # 輸出寬度
-CROP = (0, 113, 946, 2047)      # 裁掉狀態列；8 張同一範圍 → 同一尺寸
 FONT = 'C:/Windows/Fonts/arialbd.ttf'
-K = 946 / 924                   # 下面座標以 924 寬的預覽量測，乘上 K 換成原圖像素
+# 各機型原圖：尺寸、裁掉狀態列的範圍（裁完都是 720×1472 的比例 → 輸出同一尺寸）、
+#   K＝座標量測用的預覽寬換成原圖像素、示意圖形的顏色（深色模式截圖用深灰）
+DEV = {
+    'ios': dict(size=(946, 2047), crop=(0, 113, 946, 2047), k=946 / 924, ghost=GHOST, fg=(255, 255, 255)),
+    'and': dict(size=(1080, 2340), crop=(0, 132, 1080, 2340), k=1080 / 923, ghost=(66, 68, 74), fg=(28, 28, 30)),
+}
 
 # 操作（依序執行；keep 先存原圖、最後貼回）：
 #   ('map', box)                 地圖：重度模糊＋疊灰
@@ -29,6 +35,7 @@ K = 946 / 924                   # 下面座標以 924 寬的預覽量測，乘�
 #   ('text', box)                示意文字條（兩條灰色圓角條）
 #   ('avatar', (cx, cy), r)      示意大頭貼
 #   ('tile', box)                示意檔案／照片方塊（方塊＋下方兩條字）
+#   ('icon', box)                示意 App 圖示（圓角方塊）
 #   ('keep', box)                這塊保留原樣（例如地圖上的搜尋列）
 # 標記：(編號, box)；編號在每份教學內連續（時間軸 1–9、備份 1–4），和 js/guide.js 文字裡的編號對應
 JOBS = {
@@ -113,7 +120,31 @@ JOBS = {
           [(90, 360), (385, 360), (685, 360), (90, 830), (685, 830), (90, 1300), (385, 1300), (685, 1300)]],
         ('blur', (384, 826, 542, 1030)),               # 備份檔縮圖（JSON 內容）
     ], marks=[(4, (326, 818, 600, 1228))]),
+
+    # ---- Android 時間軸（三星，深色模式；座標以 923 寬的預覽量測）：設定 → 位置 → 位置服務 → 時間軸 → 匯出 ----
+    # 1 設定：位置
+    'tl-and-1': dict(dev='and', src='guide_src_android/1 (2).jpg', ops=[], marks=[(1, (30, 985, 893, 1142))]),
+    # 2 位置：位置服務（最近存取情況的 App 改成示意圖形）
+    'tl-and-2': dict(dev='and', src='guide_src_android/2 (2).jpg', ops=[
+        *[op for y in (880, 1050, 1222) for op in (
+            ('fill', (62, y - 50, 870, y + 50), (860, 1380)),
+            ('icon', (68, y - 32, 132, y + 32)),
+            ('text', (175, y - 45, 560, y + 45)))],
+    ], marks=[(2, (30, 585, 893, 698))]),
+    # 3 位置服務：時間軸
+    'tl-and-3': dict(dev='and', src='guide_src_android/3 (2).jpg', ops=[], marks=[(3, (30, 948, 893, 1112))]),
+    # 4 時間軸：匯出時間軸資料（大頭貼、起始日期與筆數蓋掉）
+    'tl-and-4': dict(dev='and', src='guide_src_android/4 (2).jpg', ops=[
+        ('fill', (788, 92, 896, 200), (700, 150)),
+        ('avatar', (841, 146), 42),
+        ('fill', (50, 1530, 885, 1625), (500, 1450)),
+        ('text', (60, 1538, 720, 1620)),
+    ], marks=[(4, (30, 1700, 893, 1835))]),
 }
+
+
+K = 1   # 目前處理中的機型（make() 設定）
+P = DEV['ios']
 
 
 def px(v):
@@ -136,42 +167,49 @@ def do_blur(img, box):
     img.paste(small.resize((w, h), Image.BILINEAR).filter(ImageFilter.GaussianBlur(10)), box[:2])
 
 
+def icon(draw, box):
+    draw.rounded_rectangle(box, radius=round((box[2] - box[0]) * 0.28), fill=P['ghost'])
+
+
 def bars(draw, box):
     x0, y0, x1, y1 = box
     h = (y1 - y0) / 2
     r = round(h * 0.22)
-    draw.rounded_rectangle((x0, y0 + h * 0.2, x0 + (x1 - x0) * 0.62, y0 + h * 0.75), radius=r, fill=GHOST)
-    draw.rounded_rectangle((x0, y0 + h * 1.2, x1, y0 + h * 1.75), radius=r, fill=GHOST)
+    draw.rounded_rectangle((x0, y0 + h * 0.2, x0 + (x1 - x0) * 0.62, y0 + h * 0.75), radius=r, fill=P['ghost'])
+    draw.rounded_rectangle((x0, y0 + h * 1.2, x1, y0 + h * 1.75), radius=r, fill=P['ghost'])
 
 
 def avatar(draw, c, r):
     cx, cy = c
-    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=GHOST)
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=P['ghost'])
     hr = r * 0.36   # 頭
-    draw.ellipse((cx - hr, cy - r * 0.55, cx + hr, cy - r * 0.55 + hr * 2), fill='white')
-    draw.chord((cx - r * 0.62, cy + r * 0.2, cx + r * 0.62, cy + r * 1.3), 180, 360, fill='white')
+    draw.ellipse((cx - hr, cy - r * 0.55, cx + hr, cy - r * 0.55 + hr * 2), fill=P['fg'])
+    draw.chord((cx - r * 0.62, cy + r * 0.2, cx + r * 0.62, cy + r * 1.3), 180, 360, fill=P['fg'])
 
 
 def tile(draw, box):
     x0, y0, x1, y1 = box
     th = (y1 - y0) * 0.68
-    draw.rounded_rectangle((x0, y0, x1, y0 + th), radius=round((x1 - x0) * 0.06), fill=GHOST)
+    draw.rounded_rectangle((x0, y0, x1, y0 + th), radius=round((x1 - x0) * 0.06), fill=P['ghost'])
     bars(draw, (x0 + (x1 - x0) * 0.1, y0 + th + (y1 - y0) * 0.05, x1 - (x1 - x0) * 0.1, y1))
 
 
 def mark(draw, n, box):
-    lw = 7
-    draw.rounded_rectangle(box, radius=22, outline=ORANGE, width=lw)
-    r = 30
+    s = P['size'][0] / 946   # 原圖越寬標記越大，縮到 720 寬後各機型一樣大
+    draw.rounded_rectangle(box, radius=round(22 * s), outline=ORANGE, width=round(7 * s))
+    r = 30 * s
     # 圓點放在框的右上角（壓在框線上），不蓋到框內文字
-    cx, cy = box[2] - 24, box[1]
-    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=ORANGE, outline='white', width=4)
-    draw.text((cx, cy), str(n), fill='white', font=ImageFont.truetype(FONT, 36), anchor='mm')
+    cx, cy = box[2] - 24 * s, box[1]
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=ORANGE, outline='white', width=round(4 * s))
+    draw.text((cx, cy), str(n), fill='white', font=ImageFont.truetype(FONT, round(36 * s)), anchor='mm')
 
 
 def make(name, job):
+    global K, P
+    P = DEV[job.get('dev', 'ios')]
+    K = P['k']
     img = Image.open(SRC / job['src']).convert('RGB')
-    assert img.size == (946, 2047), f"{job['src']} 尺寸 {img.size}，座標是照 946×2047 量的"
+    assert img.size == P['size'], f"{job['src']} 尺寸 {img.size}，座標是照 {P['size']} 量的"
     orig = img.copy()
     keeps = []
     draw = ImageDraw.Draw(img)
@@ -187,11 +225,12 @@ def make(name, job):
         elif kind == 'text': bars(draw, px(a))
         elif kind == 'avatar': avatar(draw, px(a), round(op[2] * K))
         elif kind == 'tile': tile(draw, px(a))
+        elif kind == 'icon': icon(draw, px(a))
     for b in keeps:
         img.paste(orig.crop(b), b[:2])
     for n, box in job['marks']:
         mark(draw, n, px(box))
-    img = img.crop(CROP)
+    img = img.crop(P['crop'])
     img = img.resize((WIDTH, round(img.height * WIDTH / img.width)), Image.LANCZOS)
     buf = io.BytesIO()
     img.save(buf, 'WEBP', quality=80, method=6)   # 不帶 EXIF／中繼資料

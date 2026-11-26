@@ -1109,6 +1109,11 @@ a.app-btn {
     line-height: 1.5;
 }
 
+/* 切換 iPhone／Android 版 */
+.gd-alt {
+    margin: 4px 16px 0;
+}
+
 
 .gd-track {
     display: flex;

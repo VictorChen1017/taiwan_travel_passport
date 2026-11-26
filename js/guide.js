@@ -1,19 +1,25 @@
 // 圖文教學：翻頁式卡片（<dialog>），共用一個視窗，目前兩份：
 //   timeline  匯入 Google 時間軸：第一次按首頁「匯入資料」時自動跳出（app.js 判斷 guideSeen），之後從時間軸卡片再打開
+//             分 iPhone（timeline）、Android（timeline-android）兩版：Android 裝置預設看 Android 版，其他看 iPhone 版，
+//             開頭有連結可以切換（alt）
 //   backup    足跡資料的匯出與匯入（跨裝置）：從「匯入備份」卡片打開
 //   截圖在 img/guide/，由 tools/make_guide_images.py 從 test/ 的原圖加工（遮蓋個資、加編號標記）
 //   翻頁：手機左右滑（scroll-snap）、上一頁／下一頁按鈕、點頁碼圓點、鍵盤左右鍵
+
+// 用整包匯入而不是 { ANDROID }：瀏覽器若還拿著快取的舊 device.js（沒有這個匯出），
+// 具名匯入會讓整個 app.js 載入失敗（側邊欄、按鈕全部沒反應）；整包匯入只是拿到 undefined → 看 iPhone 版
+import * as device from './device.js';
 
 export const GUIDE_KEY = 'fog-guide-timeline-seen';
 
 const n = k => `<span class="gd-n">${k}</span>`;   // 文字裡的編號，對應截圖上的橘色圓點（每份教學內連續）
 
-// 目前只有 iPhone 截圖，Android 也先看這份（步驟大致相同）；有 Android 截圖後再分兩套
 // img：img/guide/ 的檔名；全部同尺寸（720×1472，見 tools/make_guide_images.py），圖上的編號也在那裡
 const GUIDES = {
     timeline: {
         title: '怎麼匯入 Google 時間軸？',
         intro: '從 Google 地圖匯出時間軸檔案，大約 1 分鐘。本專案不會儲存任何資料。',
+        alt: ['timeline-android', '用 Android 手機？看 Android 版 ›'],
         pick: '選擇檔案',
         note: '在電腦上用：先把檔案從手機傳到電腦（AirDrop、雲端硬碟都可以）再選檔。',
         help: ['help.html#timeline', '更多說明（舊版 Google Takeout、計算方式）→'],
@@ -34,6 +40,24 @@ const GUIDES = {
               text: `${n(7)} 選一個你找得到的資料夾（點資料夾名稱可以換，例如「我的 iPhone」），再按 ${n(8)}「<b>儲存</b>」。檔名不用改。` },
             { img: 'tl-ios-8', title: '回到這裡選檔案',
               text: `按下面的「<b>選擇檔案</b>」，到剛剛存的資料夾，點 ${n(9)} <b>Timeline.json</b>。` },
+        ],
+    },
+    'timeline-android': {
+        title: '怎麼匯入 Google 時間軸？',
+        intro: '從手機設定匯出時間軸檔案，大約 1 分鐘。以三星手機為例，其他品牌的選單名稱可能略有不同。本專案不會儲存任何資料。',
+        alt: ['timeline', '用 iPhone？看 iPhone 版 ›'],
+        pick: '選擇檔案',
+        note: '在電腦上用：先把檔案從手機傳到電腦（雲端硬碟、LINE 傳給自己都可以）再選檔。',
+        help: ['help.html#timeline', '更多說明（舊版 Google Takeout、計算方式）→'],
+        pages: [
+            { img: 'tl-and-1', title: '打開手機的「設定」',
+              text: `往下找到 ${n(1)}「<b>位置</b>」，點進去。` },
+            { img: 'tl-and-2', title: '位置服務',
+              text: `點 ${n(2)}「<b>位置服務</b>」。` },
+            { img: 'tl-and-3', title: '時間軸',
+              text: `點 ${n(3)}「<b>時間軸</b>」。` },
+            { img: 'tl-and-4', title: '匯出時間軸資料',
+              text: `點 ${n(4)}「<b>匯出時間軸資料</b>」，選一個找得到的位置（例如「下載」）儲存，檔名不用改。存好後回到這裡，按下面的「<b>選擇檔案</b>」，點 <b>Timeline.json</b>。` },
         ],
     },
     backup: {
@@ -59,7 +83,7 @@ let dlg = null, guide = GUIDES.timeline, onPick = null;
 
 // 最後一頁放「選擇檔案」按鈕、補充說明、說明頁連結
 function pageHtml(p, i, total) {
-    const media = `<img class="gd-img" src="img/guide/${p.img}.webp?v=20261125d" width="720" height="1472" alt="" loading="lazy" decoding="async">`;
+    const media = `<img class="gd-img" src="img/guide/${p.img}.webp?v=20261126a" width="720" height="1472" alt="" loading="lazy" decoding="async">`;
     const last = i === total - 1;
     return `<section class="gd-page" aria-roledescription="slide" aria-label="${i + 1} / ${total}">
         <div class="gd-media">${media}</div>
@@ -84,6 +108,7 @@ function build() {
             <button type="button" class="gd-close" aria-label="關閉">✕</button>
         </div>
         <p class="gd-intro"></p>
+        <p class="gd-alt"><button type="button" class="app-guide-link"></button></p>
         <div class="gd-track" tabindex="0" aria-live="polite"></div>
         <div class="gd-nav">
             <button type="button" class="app-btn gd-prev">‹ 上一步</button>
@@ -94,6 +119,13 @@ function build() {
 
     const track = dlg.querySelector('.gd-track');
     dlg.querySelector('.gd-close').addEventListener('click', () => dlg.close());
+    // 切換 iPhone／Android 版
+    dlg.querySelector('.gd-alt button').addEventListener('click', () => {
+        if (!guide.alt) return;
+        guide = GUIDES[guide.alt[0]];
+        render();
+        dlg.querySelector('.gd-track').focus({ preventScroll: true });
+    });
     // 點遮罩（dialog 本身，不是內容）關閉
     dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
     dlg.querySelector('.gd-prev').addEventListener('click', () => go(current() - 1));
@@ -141,6 +173,8 @@ function render() {
     const pages = guide.pages;
     dlg.querySelector('#gdTitle').textContent = guide.title;
     dlg.querySelector('.gd-intro').textContent = guide.intro;
+    dlg.querySelector('.gd-alt').hidden = !guide.alt;
+    if (guide.alt) dlg.querySelector('.gd-alt button').textContent = guide.alt[1];
     dlg.querySelector('.gd-track').innerHTML = pages.map((p, i) => pageHtml(p, i, pages.length)).join('');
     dlg.querySelector('.gd-dots').innerHTML = pages.map((_, i) =>
         `<button type="button" role="tab" data-i="${i}" aria-label="第 ${i + 1} 步"></button>`).join('');
@@ -150,11 +184,11 @@ function render() {
 
 /**
  * 打開教學
- * @param name  'timeline' | 'backup'
+ * @param name  'timeline'（Android 裝置自動換成 Android 版）| 'backup'
  * @param pick  最後一頁「選擇檔案」按下時要做的事（打開對應的選檔）
  */
 export function openGuide(name, pick) {
-    guide = GUIDES[name];
+    guide = GUIDES[name === 'timeline' && device.ANDROID ? 'timeline-android' : name];
     onPick = pick;
     if (!dlg) build();
     render();

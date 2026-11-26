@@ -29,3 +29,6 @@ export const tapWord = () => (TOUCH ? '點一下' : '滑過');
 export function canShareFile(file = new File([''], 'a.png', { type: 'image/png' })) {
     try { return !!(TOUCH && navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
 }
+
+/** Android 手機或平板（只用來挑圖文教學的版本：系統選單不同，不影響版面） */
+export const ANDROID = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
