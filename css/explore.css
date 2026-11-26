@@ -161,6 +161,19 @@
 .ex-mapcard { grid-area: map; display: flex; flex-direction: column; }
 .ex-progress { grid-area: progress; }
 .ex-recent { grid-area: recent; }
+
+/* 整張卡片可點（探索率 → 捲到明細並展開；最近解鎖 → 完整解鎖順序彈窗），外框同迷霧小地圖 */
+.ex-card-link {
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+}
+
+.ex-card-link:hover,
+.ex-card-link:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px rgba(255, 77, 26, 0.45);
+}
+
 .ex-yearly { grid-area: yearly; }
 
 @media (max-width: 1200px) {
@@ -476,11 +489,26 @@
 
 .ex-table {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
-    gap: 2px 24px;
+    /* 最多兩欄（每欄至少半寬），窄到放不下 420px 時一欄 */
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, max(420px, calc((100% - 40px) / 2))), 1fr));
+    gap: 2px 40px;
+    container-type: inline-size;
+}
+
+/* 兩欄時（寬度 ≥ 420×2＋40）中間畫一條直線分隔：左欄每列右邊 20px（欄距一半）處 */
+@container (min-width: 880px) {
+    .ex-row:nth-child(odd)::after {
+        content: "";
+        position: absolute;
+        top: -1px;
+        bottom: -2px;
+        right: -20px;
+        border-right: 1px solid var(--c-border);
+    }
 }
 
 .ex-row {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(calc(70px * var(--fs, 1)), calc(110px * var(--fs, 1))) minmax(calc(80px * var(--fs, 1)), calc(110px * var(--fs, 1))) 1fr auto;
     gap: 10px;
@@ -579,8 +607,24 @@
 }
 
 /* 觸控：鄉鎮小方塊點一下顯示首次解鎖日期（data-tip），點開的那個加外框 */
-.ex-chip[data-tip] {
+.ex-chip[data-tip],
+.ex-chip[data-code] {
     cursor: pointer;
+}
+
+.ex-chip[data-code]:hover,
+.ex-chip[data-code]:focus-visible {
+    outline: 1px solid var(--c-accent);
+    outline-offset: 1px;
+}
+
+/* 明細鄉鎮小方塊的補點泡泡（位置相對於明細區塊） */
+#ex-detail-sec {
+    position: relative;
+}
+
+#ex-dtip {
+    z-index: 5;
 }
 
 .ex-chip[aria-expanded="true"] {
@@ -1400,6 +1444,38 @@ body.ex-modal-open {
 
 .ex-modal .ex-legend .sw.fog {
     background: var(--c-fog);
+}
+
+/* ---------- 完整解鎖順序彈窗（沿用成就明細彈窗的外框） ---------- */
+
+.ex-order .ex-recent-list li {
+    padding: 7px 14px;
+    font-size: calc(14px * var(--fs, 1));
+}
+
+.ex-order .ex-recent-list li.ex-order-year {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: calc(13px * var(--fs, 1));
+    font-weight: bold;
+    color: var(--ex-text);
+    background: var(--c-surface-2);
+}
+
+.ex-order-year span {
+    font-weight: normal;
+    color: var(--ex-muted);
+}
+
+.ex-omodal-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
 }
 
 /* ---------- 成就明細彈窗 ---------- */

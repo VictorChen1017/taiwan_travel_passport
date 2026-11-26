@@ -14,7 +14,7 @@
 
 import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor, CONQUER_LEVELS, conquerColor } from './shared.js';
 import { TILE } from './tiles.js';
-import { TOUCH, tapWord } from './device.js';
+import { TOUCH } from './device.js';
 import { sceneSvg, sceneEmoji, stampTilt } from './scenes.js';
 
 export const GROUP_LABEL = { milestone: '里程碑', conquer: '制霸', pole: '極點', island: '離島', landmark: '景點', bspot: 'B 級景點', peak: '登山', rail: '臺鐵・高鐵', metro: '捷運', lrt: '輕軌', nature: '國家公園與保護區', festival: '節慶與民俗活動', travel: '旅行' };
@@ -35,14 +35,14 @@ const REGIONS = {
     all: { label: '全部', box: null },
 };
 const DEFAULT_REGION = 'main';
-// 放大地圖的河川圖層開關（localStorage；只是顯示偏好，預設開）
+// 放大地圖的河川圖層開關（localStorage；只是顯示偏好，預設關，打開過才是 '1'）
 const WATER_KEY = 'fog-map-water';
-const waterOn = () => { try { return localStorage.getItem(WATER_KEY) !== '0'; } catch (e) { return true; } };
+const waterOn = () => { try { return localStorage.getItem(WATER_KEY) === '1'; } catch (e) { return false; } };
 const regionBox = ([w, s, e, n]) => ({ x: w * MAP_KX, y: -n, w: (e - w) * MAP_KX, h: n - s });
 // 放大上限（視窗最窄幾個地圖單位）：縣市、鄉鎮 0.15（約 16 公里寬，一個鄉鎮大致佔滿手機畫面）；
-// 村里再多三級（按鈕一級 1.5 倍 → ÷ 1.5³ ≈ 3.4，約 5 公里寬），方便手指點小村里（2026-11-26 維護者要求，先兩級再加一級）。
+// 村里再多四級（按鈕一級 1.5 倍 → ÷ 1.5⁴ ≈ 5.1，約 3 公里寬），方便手指點小村里（2026-11-26 維護者要求，先兩級、再逐次各加一級）。
 // 村里界簡化容許值約 180 公尺，放到最大時直線感較明顯，但整層一起簡化、不會有縫
-const MIN_VIEW_W = { county: 0.15, town: 0.15, village: 0.15 / 1.5 ** 3 };
+const MIN_VIEW_W = { county: 0.15, town: 0.15, village: 0.15 / 1.5 ** 4 };
 const isPointDetail = id => Object.values(POINT_STAMPS).some(p => id.startsWith(p.prefix));
 
 const pad = n => String(n).padStart(2, '0');
@@ -125,13 +125,13 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                         <span class="ex-zoom-hint">🔍 點擊放大</span>
                     </div>
                 </div>
-                <div class="ex-card ex-progress">
-                    <div class="ex-card-title">探索率</div>
+                <div class="ex-card ex-progress ex-card-link" id="ex-progress-card" role="button" tabindex="0" title="點擊看明細">
+                    <div class="ex-card-title">探索率 <small>點擊看明細 ›</small></div>
                     <div id="ex-donut" class="ex-donut"></div>
                     <div id="ex-progress-sub" class="ex-progress-sub"></div>
                 </div>
-                <div class="ex-card ex-recent">
-                    <div class="ex-card-title">最近解鎖</div>
+                <div class="ex-card ex-recent ex-card-link" id="ex-recent-card" role="button" tabindex="0" title="點擊看完整解鎖順序">
+                    <div class="ex-card-title">最近解鎖 <small id="ex-recent-more">點擊看完整順序 ›</small></div>
                     <ol id="ex-recent" class="ex-recent-list"></ol>
                 </div>
                 <div class="ex-card ex-yearly" id="ex-yearly-card">
@@ -143,6 +143,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 <summary><span class="ex-section-title">📋 <span id="ex-detail-title">明細</span></span>
                     <span class="ex-section-hint">點擊展開</span></summary>
                 <div id="ex-detail" class="ex-detail"></div>
+                <div id="ex-dtip" class="ex-tip" hidden></div>
             </details>
             <details class="ex-section ex-badges-sec" id="ex-badges-sec">
                 <summary><span class="ex-section-title">🏅 成就徽章</span>
@@ -162,6 +163,20 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             });
         });
         root.querySelector('#ex-start-go').addEventListener('click', showBadgeOverview);
+        // 探索率 → 捲到下方明細並展開（村里明細很長，不放彈窗）
+        // 最近解鎖 → 完整解鎖順序彈窗；整張卡片可點（鍵盤 Enter／空白鍵也可）
+        const cardLink = (id, fn) => {
+            const card = root.querySelector(id);
+            card.addEventListener('click', fn);
+            card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } });
+        };
+        cardLink('#ex-progress-card', () => {
+            const sec = root.querySelector('#ex-detail-sec');
+            sec.open = true;
+            sec.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+        });
+        cardLink('#ex-recent-card', openOrder);
+        bindDetailTip();
         let rt = null;
         window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => state.data && renderYearly(), 150); });
         bindInlineMap();
@@ -179,6 +194,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         renderRecent();
         renderYearly();
         renderDetail();
+        refreshDetailTip();
         renderMap();
     }
 
@@ -214,6 +230,103 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                                   <span class="ex-recent-name" title="${esc(x.name)}">${esc(x.name)}</span>
                                   <span class="ex-recent-n">第 ${x.n.toLocaleString()} 個</span></li>`).join('')
             : '<li class="ex-empty">尚無資料</li>';
+        const more = root.querySelector('#ex-recent-more');
+        more.hidden = !items.length;
+        more.textContent = `點擊看完整順序（${items.length.toLocaleString()} 個）›`;
+        if (omodal && !omodal.hidden) drawOrder();
+    }
+
+    // ---------- 完整解鎖順序彈窗（最近解鎖卡片點進去；跟著縣市／鄉鎮／村里切換） ----------
+
+    let omodal = null;
+
+    function openOrder() {
+        if (!state.data) return;
+        if (!omodal) {
+            omodal = document.createElement('div');
+            omodal.className = 'ex-modal ex-dmodal ex-omodal';
+            omodal.hidden = true;
+            omodal.innerHTML = `
+                <div class="ex-modal-box ex-dmodal-box" role="dialog" aria-modal="true" aria-labelledby="ex-omodal-title">
+                    <div class="ex-modal-head">
+                        <span id="ex-omodal-title" class="ex-modal-title"></span>
+                        <span class="ex-modal-tools">
+                            <button type="button" data-act="close" class="ex-modal-x" title="關閉（Esc）">✕</button>
+                        </span>
+                    </div>
+                    <div class="ex-omodal-bar">
+                        <span class="ex-seg ex-dmodal-sort" role="group" aria-label="層級">
+                            <button type="button" data-unit="county">縣市</button>
+                            <button type="button" data-unit="town">鄉鎮</button>
+                            <button type="button" data-unit="village">村里</button>
+                        </span>
+                        <span class="ex-seg ex-dmodal-sort" role="group" aria-label="排序">
+                            <button type="button" data-order="new">最新在上</button>
+                            <button type="button" data-order="old">最早在上</button>
+                        </span>
+                    </div>
+                    <div class="ex-dmodal-note"></div>
+                    <div class="ex-dmodal-body ex-order"></div>
+                </div>`;
+            document.body.appendChild(omodal);
+            omodal._order = 'new';
+            omodal.addEventListener('click', e => {
+                const t = e.target;
+                if (t === omodal || t.dataset.act === 'close') closeOrder();
+                else if (t.dataset.unit && t.dataset.unit !== state.unit) {
+                    state.unit = t.dataset.unit;   // 和頁面上方的切換同步（update 會經 renderRecent 重畫這個彈窗）
+                    update();
+                    omodal.querySelector('.ex-order').scrollTop = 0;
+                }
+                else if (t.dataset.order && t.dataset.order !== omodal._order) {
+                    omodal._order = t.dataset.order;
+                    drawOrder();
+                    omodal.querySelector('.ex-order').scrollTop = 0;
+                }
+            });
+            document.addEventListener('keydown', e => { if (e.key === 'Escape' && !omodal.hidden) closeOrder(); });
+        }
+        omodal._order = 'new';
+        drawOrder();
+        omodal.hidden = false;
+        document.body.classList.add('ex-modal-open');
+        omodal.querySelector('.ex-order').scrollTop = 0;
+        omodal.querySelector('.ex-modal-x').focus({ preventScroll: true });
+    }
+
+    function closeOrder() {
+        omodal.hidden = true;
+        document.body.classList.remove('ex-modal-open');
+        root.querySelector('#ex-recent-card').focus({ preventScroll: true });
+    }
+
+    function drawOrder() {
+        const unit = UNIT_LABEL[state.unit];
+        const items = unlockedItems(state.unit).filter(x => x.first).sort((a, b) => a.first - b.first)
+            .map((x, i) => ({ ...x, n: i + 1 }));
+        if (omodal._order === 'new') items.reverse();
+        omodal.querySelector('.ex-modal-title').textContent = `🔓 ${unit}解鎖順序`;
+        omodal.querySelectorAll('[data-order]').forEach(b => b.classList.toggle('active', b.dataset.order === omodal._order));
+        omodal.querySelectorAll('[data-unit]').forEach(b => b.classList.toggle('active', b.dataset.unit === state.unit));
+        omodal.querySelector('.ex-dmodal-note').textContent = items.length
+            ? `共 ${items.length.toLocaleString()} 個${unit}，依首次解鎖時間排列` : '';
+        // 依年份分段（標題列固定在上方），每列：日期、名稱、第 N 個
+        const yearOf = x => new Date(x.first * 1000).getUTCFullYear();
+        const perYear = new Map();
+        for (const x of items) perYear.set(yearOf(x), (perYear.get(yearOf(x)) || 0) + 1);
+        let html = '', year = null;
+        for (const x of items) {
+            const y = yearOf(x);
+            if (y !== year) {
+                html += `<li class="ex-order-year">${y} 年<span>${perYear.get(y).toLocaleString()} 個</span></li>`;
+                year = y;
+            }
+            html += `<li><span class="ex-recent-date">${fmtDate(x.first)}</span>
+                <span class="ex-recent-name" title="${esc(x.name)}">${esc(x.name)}</span>
+                <span class="ex-recent-n">第 ${x.n.toLocaleString()} 個</span></li>`;
+        }
+        omodal.querySelector('.ex-order').innerHTML = items.length
+            ? `<ol class="ex-recent-list">${html}</ol>` : '<div class="ex-empty">尚無資料</div>';
     }
 
     // ---------- 每年新解鎖（SVG 長條＋累積折線） ----------
@@ -290,7 +403,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         });
 
         if (state.unit === 'county') {
-            title.textContent = `明細：各縣市（鄉鎮解鎖${byArea ? '面積' : '數'}，依進度排序）`;
+            title.textContent = '縣市集點卡';
             el.innerHTML = `<div class="ex-table">${sortedCounties.map(c => {
                 const [x, y] = countyProgress(c);
                 const label = byArea ? `${fmtInt(x)} / ${fmtInt(y)} km²` : `${x} / ${y} 鄉鎮`;
@@ -304,13 +417,12 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         }
 
         if (state.unit === 'town') {
-            // 滑鼠滑過用 title；觸控沒有滑過，改用 data-tip 點一下顯示說明泡泡（js/app.js bindTips）
-            title.textContent = `明細：各縣市的鄉鎮（${tapWord()}看首次解鎖日期）`;
-            const tipAttr = TOUCH ? 'data-tip' : 'title';
+            // 點一下開泡泡（首次解鎖日期＋手動補點，同迷霧地圖放大彈窗；bindDetailTip）
+            title.textContent = '鄉鎮集點卡';
             el.innerHTML = sortedCounties.map(c => {
                 const towns = d.towns.filter(t => t.county === c.code);
-                const chips = towns.map(t => `<span class="ex-chip${t.unlocked ? ' on' : ''}"
-                    ${tipAttr}="${esc(t.name)}：${t.unlocked ? '首次解鎖 ' + fmtDate(t.first) : '未解鎖'}">${esc(t.name)}</span>`).join('');
+                const chips = towns.map(t => `<span class="ex-chip${t.unlocked ? ' on' : ''}" data-code="${esc(t.code)}"
+                    role="button" tabindex="0">${esc(t.name)}</span>`).join('');
                 return `<div class="ex-group">
                     <div class="ex-group-head"><b>${esc(c.name)}</b><span>${c.towns_unlocked} / ${c.towns}</span>
                         ${c.towns_unlocked === c.towns ? '<span class="ex-tag">制霸</span>' : ''}</div>
@@ -320,7 +432,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         }
 
         // 村里：依縣市分組（可展開），每個鄉鎮一列村里進度
-        title.textContent = `明細：各縣市的村里（依鄉鎮列出村里解鎖${byArea ? '面積' : '數'}）`;
+        title.textContent = '村里集點卡';
         const vProg = x => byArea ? [x.village_area_unlocked, x.village_area ?? x.area] : [x.villages_unlocked, x.villages];
         el.innerHTML = [...d.counties].sort((a, b) => b.villages_unlocked / b.villages - a.villages_unlocked / a.villages).map(c => {
             const towns = d.towns.filter(t => t.county === c.code)
@@ -670,6 +782,67 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         });
     }
 
+    // ---------- 明細的鄉鎮小方塊：點一下開泡泡，可手動補點（和放大彈窗的鄉鎮地圖同一套：tipManualHtml、bindTipManual） ----------
+    // dsvg 是給補點程式用的替身（不是真的 svg）：_paths 取自鄉鎮地圖（代表點、代表村里），第一次點時才載入
+
+    const dsvg = { _level: 'town', _paths: null, _cv: null, _pin: null };
+
+    function bindDetailTip() {
+        const sec = root.querySelector('#ex-detail-sec');
+        const tip = root.querySelector('#ex-dtip');
+        const chipOf = code => root.querySelector(`#ex-detail .ex-chip[data-code="${CSS.escape(code)}"]`);
+        dsvg._showTip = (el, cx, cy, pin = true) => {
+            root.querySelectorAll('#ex-detail .ex-chip[aria-expanded]').forEach(c => c.removeAttribute('aria-expanded'));
+            const code = el && el.dataset && el.dataset.code;
+            const chip = code && state.unit === 'town' && chipOf(code);
+            if (!chip || !pin) { tip.hidden = true; dsvg._pin = null; return; }
+            const item = state.idx.town.get(code);
+            const on = item && item.unlocked;
+            const name = item ? fullName('town', item) : chip.textContent;
+            // 位置每次從小方塊現在的位置算（加入表單時會重新定位，期間可能捲動過）；placeTip 會往右下偏 14px
+            dsvg._pin = { code, get x() { return chip.getBoundingClientRect().left - 14; }, get y() { return chip.getBoundingClientRect().bottom - 10; } };
+            tip.classList.add('pinned');
+            tip.innerHTML = `<b>${esc(name)}</b><br>${on ? `首次解鎖 ${fmtDate(item.first)}${item.n ? `<br>照片 ${fmtInt(item.n)} 張` : ''}` : '未解鎖'}`
+                + tipManualHtml(dsvg, code);
+            tip.hidden = false;
+            placeTip(tip, sec, dsvg._pin.x, dsvg._pin.y);
+            chip.setAttribute('aria-expanded', 'true');
+        };
+        const open = async chip => {
+            const code = chip.dataset.code;
+            if (dsvg._pin && dsvg._pin.code === code) { dsvg._showTip(null); return; }
+            if (!dsvg._paths) {
+                try {
+                    const m = await getMap('town');
+                    dsvg._paths = new Map(m.paths.map(p => [p.code, p]));
+                    dsvg._cv = { byCode: new Map(m.paths.map(p => [p.code, { code: p.code }])) };
+                } catch (e) { /* 地圖載入失敗：泡泡照樣顯示日期，只是沒有補點按鈕 */ }
+            }
+            dsvg._showTip({ dataset: { code } });
+        };
+        root.querySelector('#ex-detail').addEventListener('click', e => {
+            const chip = e.target.closest('.ex-chip[data-code]');
+            if (chip) open(chip);
+        });
+        root.querySelector('#ex-detail').addEventListener('keydown', e => {
+            const chip = e.target.closest('.ex-chip[data-code]');
+            if (chip && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(chip); }
+        });
+        // 點泡泡和小方塊以外的地方、按 Esc：收起
+        document.addEventListener('click', e => {
+            // 用 composedPath：泡泡裡的按鈕按下後可能已被換掉（不在 tip 裡了）
+            const path = e.composedPath();
+            if (dsvg._pin && !path.includes(tip) && !path.some(n => n.matches && n.matches('#ex-detail .ex-chip[data-code]'))) dsvg._showTip(null);
+        });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && dsvg._pin) dsvg._showTip(null); });
+        bindTipManual(dsvg, tip, sec);
+    }
+
+    // 資料更新（例如剛補點）或切換層級後：重新固定原本的泡泡（不在鄉鎮明細就收起）
+    function refreshDetailTip() {
+        if (dsvg._pin && dsvg._showTip) dsvg._showTip({ dataset: { code: dsvg._pin.code } });
+    }
+
     // ---------- 放大彈窗：滾輪縮放、拖曳平移 ----------
 
     let modal = null;
@@ -688,8 +861,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                     <span class="ex-modal-tools">
                         <button type="button" data-act="in" title="放大">＋</button>
                         <button type="button" data-act="out" title="縮小">－</button>
-                        <button type="button" data-act="water" class="ex-modal-water" aria-pressed="${waterOn()}" title="顯示河川、水庫與湖泊">💧 河川</button>
-                        <button type="button" data-act="reset" title="重設">重設</button>
+                        <button type="button" data-act="water" class="ex-modal-water" aria-pressed="${waterOn()}" title="顯示河川、水庫與湖泊" aria-label="顯示河川、水庫與湖泊">💧</button>
+                        <button type="button" data-act="reset" title="縮放回本島全圖（不會刪除任何資料）">全圖</button>
                         <button type="button" data-act="close" class="ex-modal-x" title="關閉（Esc）">✕</button>
                     </span>
                 </div>
@@ -914,7 +1087,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
 
     /**
      * 水系圖層（data/map_water.json，tools/export_water.py 產生）：主要河川主流、大型水庫與湖泊，只畫在放大彈窗（小地圖太小會變雜）。
-     * 第一次開彈窗時才下載；失敗就不畫，不影響地圖。工具列「💧 河川」開關（預設開，記在 localStorage）；關著時不下載
+     * 第一次開彈窗時才下載；失敗就不畫，不影響地圖。工具列「💧」開關（預設關，記在 localStorage）；關著時不下載
      */
     function loadWater(svg) {
         if (!waterOn() || svg._water || svg._waterLoading) return;

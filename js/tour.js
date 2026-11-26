@@ -27,7 +27,7 @@ export const TOURS = {
         { el: () => $('ex-mapcard'), title: '② 迷霧地圖',
           text: '去過的地方會撥開迷霧。<b>點地圖</b>可以放大、縮放拖曳，點一個區域還能手動補上去過的地方。', act: 'modal' },
         { el: () => document.querySelector('#explore .ex-progress'), title: '探索率',
-          text: '走過的縣市、鄉鎮、村里占全台的比例。上方可以切換<b>縣市／鄉鎮／村里</b>、<b>個數／面積</b>。' },
+          text: '走過的縣市、鄉鎮、村里占全台的比例。上方可以切換<b>縣市／鄉鎮／村里</b>、<b>個數／面積</b>；<b>點這張卡片</b>看各縣市的明細。', act: 'next' },
         { el: () => document.querySelector('#ex-badges-sec > summary'), title: '成就徽章',
           text: '百岳、車站、離島、景點……各類成就都在這裡。<b>點這一列</b>展開，再點任一徽章看明細與地圖。', act: 'next',
           // 展開後框住整個徽章區

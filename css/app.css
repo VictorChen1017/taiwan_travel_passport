@@ -861,7 +861,7 @@ a.app-btn {
 }
 
 .app-check input,
-.app-source-list input[type="checkbox"] {
+.app-source-list input.src-sel {
     width: 18px;
     height: 18px;
     margin: 0;
@@ -877,12 +877,88 @@ a.app-btn {
 
 .app-source-list li {
     display: grid;
-    grid-template-columns: auto auto 1fr;
+    grid-template-columns: auto auto 1fr auto;
     gap: 4px 12px;
     align-items: center;
     padding: 12px 14px;
     border-bottom: 1px solid var(--c-border);
     cursor: pointer;
+}
+
+/* 「納入計算」開關（撥動開關樣式）；關掉的來源整列變淡 */
+.app-source-list .src-use {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.app-source-list .src-use input {
+    appearance: none;
+    position: relative;
+    width: 38px;
+    height: 22px;
+    margin: 0;
+    background: var(--c-surface-3);
+    border: 1px solid var(--c-border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.app-source-list .src-use input::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: var(--c-surface);
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+    transition: transform 0.15s;
+}
+
+.app-source-list .src-use input:checked {
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+}
+
+.app-source-list .src-use input:checked::after {
+    transform: translateX(16px);
+}
+
+.app-source-list .src-use input:focus-visible {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 2px;
+}
+
+.app-source-list .src-use-text {
+    font-size: calc(11.5px * var(--fs, 1));
+    color: var(--c-text-muted);
+    white-space: nowrap;
+}
+
+.app-source-list li.off .icon,
+.app-source-list li.off .src-body {
+    opacity: 0.5;
+}
+
+.app-source-list .src-off-tag {
+    margin-left: 6px;
+    padding: 1px 7px;
+    font-size: calc(11.5px * var(--fs, 1));
+    font-weight: normal;
+    color: var(--c-text-muted);
+    background: var(--c-surface-3);
+    border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-source-list .src-use input,
+    .app-source-list .src-use input::after { transition: none; }
 }
 
 .app-source-list li:hover {

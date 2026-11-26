@@ -88,7 +88,7 @@ function loadMap(level) {
  * 手動紀錄另外帶 ref（items 的編號）與 targets（編號 → 地點成就 id），明細才知道哪一列是哪一筆
  */
 function mergedRecords(mode) {
-    const srcs = app.sources.filter(s => mode !== 'photo' || PHOTO_TYPES.has(s.type));
+    const srcs = app.sources.filter(s => !s.off && (mode !== 'photo' || PHOTO_TYPES.has(s.type)));
     const keep = k => app.includePath || k !== 2;
     let n = 0;
     for (const s of srcs) n += s.records.kind.length;
@@ -113,7 +113,7 @@ function mergedRecords(mode) {
         }
     }
     app.lastDup = dup;   // 開發測試用
-    const m = mode !== 'photo' ? manualSource() : null;
+    const m = mode !== 'photo' && !manualSource()?.off ? manualSource() : null;
     app.manualSnapshot = m ? m.items.slice() : [];   // 這次計算用的手動紀錄（ref → item）
     return { lat: lat.slice(0, o), lng: lng.slice(0, o), time: time.slice(0, o), kind: kind.slice(0, o), ref: ref.slice(0, o),
              targets: app.manualSnapshot.map(it => it.target) };
@@ -173,6 +173,7 @@ async function addSource(src, { persist = true } = {}) {
         src.id = old.id;
         src.added = old.added;
         src.updated = now;
+        if (old.off) src.off = true;   // 取代時沿用「不納入計算」
         app.sources[app.sources.indexOf(old)] = src;
     } else {
         src.id = newId();
@@ -181,8 +182,25 @@ async function addSource(src, { persist = true } = {}) {
         app.sources.push(src);
     }
     if (persist) await saveSource(src);
+    else src.temp = true;   // 測試資料：不存進瀏覽器（切換納入計算時也不存）
     renderSources();
     await compute();
+}
+
+/**
+ * 來源的「納入計算」開關：關掉的來源（off: true）不參與計算，其他功能（匯出、刪除）照常
+ * 狀態存在這個瀏覽器的來源物件裡；備份檔不帶（js/backup.js 只匯出固定欄位），還原後全部納入
+ */
+async function setSourceUse(id, on) {
+    const s = app.sources.find(x => x.id === id);
+    if (!s || !s.off === on) return;
+    if (on) delete s.off; else s.off = true;
+    if (!s.temp) await saveSource(s);
+    const picked = new Set(selectedIds());   // 重畫列表時保留勾選
+    renderSources();
+    $('sourceList').querySelectorAll('li[data-id]').forEach(li => { li.querySelector('input.src-sel').checked = picked.has(li.dataset.id); });
+    updateSelection();
+    if (app.explore && app.explore.data()) await compute({ show: false });
 }
 
 // ---------- 手動紀錄（js/manual.js） ----------
@@ -197,6 +215,7 @@ async function addManual(info, date) {
     const time = manual.dateToTime(date);
     if (src && manual.findSame(src, info.target, time)) return time ? `「${info.label}」在 ${date} 已經有手動紀錄了` : `「${info.label}」已經有一筆沒有日期的手動紀錄了`;
     if (!src) { src = manual.emptyManual(); app.sources.push(src); }
+    delete src.off;   // 手動紀錄來源被關掉時，加入新的一筆就重新納入計算（不然加了看不到）
     src.items.push(manual.newItem(info, date));
     src.updated = Date.now();
     manual.refresh(src);
@@ -392,11 +411,14 @@ function renderSources() {
     $('sourcesTitle').textContent = app.sources.length ? '再加入資料來源' : '選擇資料來源';
     renderSteps();
     $('sourceList').innerHTML = app.sources.map(s => `
-        <li data-id="${esc(s.id)}">
-            <input type="checkbox" aria-label="選取「${esc(s.name || '未命名')}」">
+        <li data-id="${esc(s.id)}"${s.off ? ' class="off"' : ''}>
+            <input type="checkbox" class="src-sel" aria-label="選取「${esc(s.name || '未命名')}」">
             <span class="icon">${sourceIcon(s)}</span>
-            <div><div class="name">${esc(s.name || '未命名')}</div>${(sum => `<div class="meta">${sum.main}</div>
+            <div class="src-body"><div class="name">${esc(s.name || '未命名')}${s.off ? ' <span class="src-off-tag">不納入計算</span>' : ''}</div>${(sum => `<div class="meta">${sum.main}</div>
                 <details class="src-more"><summary>詳細資訊</summary><div class="meta">${sum.detail.filter(Boolean).join('<br>')}</div></details>`)(sourceSummary(s))}</div>
+            <label class="src-use" title="${s.off ? '目前不納入計算，打開後重新計算' : '關掉後這個來源不參與計算'}">
+                <input type="checkbox" role="switch"${s.off ? '' : ' checked'} aria-label="「${esc(s.name || '未命名')}」納入計算">
+                <span class="src-use-text">納入計算</span></label>
         </li>`).join('');
     updateSelection();
 }
@@ -433,7 +455,7 @@ function markStep(step) {
 
 /** 依勾選狀態更新：全選框、所選筆數、刪除按鈕、列的底色 */
 function updateSelection() {
-    const boxes = [...$('sourceList').querySelectorAll('input[type="checkbox"]')];
+    const boxes = [...$('sourceList').querySelectorAll('input.src-sel')];
     const n = boxes.filter(b => b.checked).length;
     boxes.forEach(b => b.closest('li').classList.toggle('selected', b.checked));
     const all = $('selectAll');
@@ -447,7 +469,7 @@ function updateSelection() {
 
 /** 勾選的來源 id */
 const selectedIds = () => [...$('sourceList').querySelectorAll('li[data-id]')]
-    .filter(li => li.querySelector('input').checked).map(li => li.dataset.id);
+    .filter(li => li.querySelector('input.src-sel').checked).map(li => li.dataset.id);
 
 // ---------- 備份 ----------
 
@@ -638,7 +660,7 @@ function openToc(open) {
 }
 
 /**
- * 「？」說明鈕：任何 [data-tip]（.qtip 說明鈕、觸控時的鄉鎮明細小方塊）點一下在旁邊顯示說明泡泡，再點一次、點別處、Esc 或捲動時關閉。
+ * 「？」說明鈕：任何 [data-tip]（.qtip 說明鈕）點一下在旁邊顯示說明泡泡，再點一次、點別處、Esc 或捲動時關閉。
  * 手機沒有滑鼠移上，所以不用 title。
  */
 function bindTips() {
@@ -747,12 +769,17 @@ function bindUi() {
     // 已匯入的來源：點整列切換勾選、全選、刪除所選
     $('sourceList').addEventListener('click', e => {
         const li = e.target.closest('li[data-id]');
-        if (!li || e.target.closest('.src-more')) return;   // 展開詳細資訊不切換勾選
-        if (e.target.type !== 'checkbox') { const b = li.querySelector('input'); b.checked = !b.checked; }
+        if (!li || e.target.closest('.src-more, .src-use')) return;   // 展開詳細資訊、納入計算開關不切換勾選
+        if (e.target.type !== 'checkbox') { const b = li.querySelector('input.src-sel'); b.checked = !b.checked; }
         updateSelection();
     });
+    // 納入計算開關：切換後重新計算（已計算過時）
+    $('sourceList').addEventListener('change', e => {
+        if (!e.target.matches('.src-use input')) return;
+        setSourceUse(e.target.closest('li[data-id]').dataset.id, e.target.checked);
+    });
     $('selectAll').addEventListener('change', e => {
-        $('sourceList').querySelectorAll('input[type="checkbox"]').forEach(b => { b.checked = e.target.checked; });
+        $('sourceList').querySelectorAll('input.src-sel').forEach(b => { b.checked = e.target.checked; });
         updateSelection();
     });
     $('exportBtn').addEventListener('click', doExport);
