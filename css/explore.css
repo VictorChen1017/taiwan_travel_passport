@@ -1406,22 +1406,23 @@ body.ex-modal-open {
     border-color: var(--c-accent);
 }
 
-/* 放大地圖上的按鈕：縮放、河川、全圖在右上角由上往下；播放動畫在右下角（疊在地圖畫布之上、泡泡之下） */
+/* 放大地圖上的按鈕：縮放、河川、全圖在左下角由上往下（小一點，2026-11-27 手機回饋）；播放動畫在右下角維持原本大小（疊在地圖畫布之上、泡泡之下） */
 .ex-map-ctrls,
 .ex-map-playbtn {
     position: absolute;
-    right: 10px;
+    bottom: 10px;
     z-index: 1;
     margin: 0;
 }
 
 .ex-map-ctrls {
-    top: 10px;
+    left: 10px;
     flex-direction: column;
+    gap: 4px;
 }
 
 .ex-map-playbtn {
-    bottom: 10px;
+    right: 10px;
 }
 
 .ex-map-ctrls button,
@@ -1430,8 +1431,10 @@ body.ex-modal-open {
 }
 
 .ex-map-ctrls button {
-    min-width: 40px;
-    height: 36px;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 6px;
+    font-size: calc(12px * var(--fs, 1));
 }
 
 .ex-map-playbtn button {
@@ -1439,31 +1442,41 @@ body.ex-modal-open {
     font-weight: bold;
 }
 
-/* 逐年播放：地圖左上角的時間浮標、地圖下方的播放列 */
+/* 播放中：地區切換（本島／金門／馬祖／全部）隱藏，縣市範圍由播放列的選單決定 */
+.ex-modal.ex-playing .ex-modal-regions {
+    display: none;
+}
+
+/* 逐年播放：地圖左上角的時間浮標（不加底框，文字描一圈海的顏色，比較不擋地圖）、地圖下方的播放列 */
 .ex-play-stamp {
     position: absolute;
-    top: 10px;
+    top: 8px;
     left: 10px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 8px 12px;
     color: var(--c-text);
-    background: var(--c-surface);
-    border: 1px solid var(--c-border);
-    border-radius: 8px;
-    box-shadow: 0 2px 8px var(--c-shadow);
+    text-shadow: 0 0 3px var(--c-sidebar-bg), 0 0 3px var(--c-sidebar-bg), 0 0 6px var(--c-sidebar-bg);
     pointer-events: none;
 }
 
 .ex-play-stamp b {
-    font-size: calc(22px * var(--fs, 1));
+    font-size: calc(18px * var(--fs, 1));
     font-variant-numeric: tabular-nums;
 }
 
 .ex-play-stamp span {
-    font-size: calc(13px * var(--fs, 1));
+    font-size: calc(12px * var(--fs, 1));
     color: var(--c-text-muted);
+}
+
+@media (max-width: 640px) {
+    .ex-play-stamp b {
+        font-size: calc(15px * var(--fs, 1));
+    }
+
+    .ex-play-stamp span {
+        font-size: calc(11px * var(--fs, 1));
+    }
 }
 
 .ex-play {
@@ -1578,9 +1591,20 @@ body.ex-modal-open {
 
 /* ---------- 完整解鎖順序彈窗（沿用成就明細彈窗的外框） ---------- */
 
+/* 日期一律不換行（日期等寬數字，每列寬度一樣、上下對齊）；名稱在中間欄置中（2026-11-27 手機回饋：日期折成兩行沒對齊） */
 .ex-order .ex-recent-list li {
+    grid-template-columns: max-content 1fr max-content;
     padding: 7px 14px;
     font-size: calc(14px * var(--fs, 1));
+}
+
+.ex-order .ex-recent-date,
+.ex-order .ex-recent-n {
+    white-space: nowrap;
+}
+
+.ex-order .ex-recent-name {
+    text-align: center;
 }
 
 .ex-order .ex-recent-list li.ex-order-year {
@@ -2184,4 +2208,106 @@ body.ex-modal-open {
 
 :root[data-theme="dark"] .ex-tform input[type="date"] {
     color-scheme: dark;
+}
+
+/* ---------- 迷霧地圖播放動畫：匯出影片（地圖上的小面板；錄的是另一張 canvas，面板不會被錄進去） ---------- */
+.ex-map-playbtn .ex-modal-video {
+    height: 36px;
+    font-weight: bold;
+}
+
+.ex-video {
+    position: absolute;
+    right: 10px;
+    bottom: 56px;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(320px, calc(100% - 20px));
+    padding: 12px 14px;
+    font-size: calc(13px * var(--fs, 1));
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+    box-shadow: 0 4px 16px var(--c-shadow);
+}
+
+.ex-video-title {
+    font-size: calc(15px * var(--fs, 1));
+}
+
+.ex-video-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ex-video-row > span:first-child {
+    flex: none;
+    color: var(--c-text-muted);
+}
+
+.ex-video-row input {
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    padding: 0 8px;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 6px;
+}
+
+.ex-video-note {
+    margin: 0;
+    font-size: calc(12px * var(--fs, 1));
+    line-height: 1.5;
+    color: var(--c-text-muted);
+}
+
+.ex-video-progress {
+    height: 6px;
+    overflow: hidden;
+    background: var(--c-surface-3);
+    border-radius: 3px;
+}
+
+.ex-video-progress i {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: var(--c-accent);
+}
+
+.ex-video-btns {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.ex-video-status {
+    flex: 1;
+    min-width: 0;
+}
+
+.ex-video-btns button {
+    height: 32px;
+    padding: 0 12px;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.ex-video-btns button.primary {
+    font-weight: bold;
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+    border-color: var(--c-accent);
 }

@@ -802,6 +802,12 @@ function savePref(o) {
     } catch (e) { /* 存不了只影響下次 */ }
 }
 
+/** 暱稱（「XX的足跡」）：成就卡片和迷霧地圖的匯出影片共用，存在成就卡片的選項裡 */
+export function loadNickname() { return String(loadPref().nickname || ''); }
+export function saveNickname(nick) {
+    try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...loadPref(), nickname: nick })); } catch (e) { /* 存不了只影響下次 */ }
+}
+
 const presetBlocks = id => new Set((PRESETS.find(p => p.id === id) || PRESETS[0]).blocks);
 
 export function createReport({ getStats, loadMap, getMeta }) {
@@ -1051,6 +1057,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
 
     function open() {
         if (!modal) build();
+        o.nickname = loadNickname();   // 可能在迷霧地圖匯出影片時改過
         renderAdv();
         syncForm();
         modal.hidden = false;

@@ -14,7 +14,9 @@
 
 import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor, PLAY_NOW_COLOR, PLAY_PAST_COLOR, CONQUER_LEVELS, conquerColor } from './shared.js';
 import { TILE } from './tiles.js';
-import { TOUCH } from './device.js';
+import { TOUCH, canShareFile } from './device.js';
+import { videoFormat, recordVideo } from './video.js';
+import { loadNickname, saveNickname, NICK_SAMPLE } from './report.js';
 import { sceneSvg, sceneEmoji, stampTilt } from './scenes.js';
 
 export const GROUP_LABEL = { milestone: '里程碑', conquer: '制霸', pole: '極點', island: '離島', landmark: '景點', bspot: 'B 級景點', peak: '登山', rail: '臺鐵・高鐵', metro: '捷運', lrt: '輕軌', nature: '國家公園與保護區', festival: '節慶與民俗活動', travel: '旅行' };
@@ -629,7 +631,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         return { r, vx, vy, s, ox: (r.width - vw / s) / 2, oy: (r.height - vh / s) / 2 };
     }
     function paintCanvas(svg) {
-        const cv = svg._cv, c = canvasOf(svg);
+        const c = canvasOf(svg);
         c.hidden = false;
         const { r, vx, vy, s, ox, oy } = viewOf(svg);
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -639,10 +641,18 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const ctx = c.getContext('2d');
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, w, h);
+        paintMapTo(ctx, svg, { mx0: vx - ox * s, my0: vy - oy * s, s, dpr, w: r.width, h: r.height });
+    }
+    /**
+     * 把地圖畫到 ctx：v.mx0、v.my0 畫面左上角的地圖座標；v.s 每個「畫面點」的地圖單位；v.dpr 每個畫面點幾個像素；
+     * v.w、v.h 畫面大小（畫面點）；v.tx、v.ty 畫在 ctx 的哪裡（像素，匯出影片用）。線寬以畫面點計
+     */
+    function paintMapTo(ctx, svg, { mx0, my0, s, dpr, w, h, tx = 0, ty = 0 }) {
+        const cv = svg._cv;
         const k = dpr / s;
-        ctx.setTransform(k, 0, 0, k, (ox - vx / s) * dpr, (oy - vy / s) * dpr);
+        ctx.setTransform(k, 0, 0, k, tx - mx0 * k, ty - my0 * k);
         // 畫面範圍（地圖座標）外的區域不畫
-        const mx0 = vx - ox * s, my0 = vy - oy * s, mx1 = mx0 + r.width * s, my1 = my0 + r.height * s;
+        const mx1 = mx0 + w * s, my1 = my0 + h * s;
         const vis = cv.items.filter(x => x.box[2] >= mx0 && x.box[0] <= mx1 && x.box[3] >= my0 && x.box[1] <= my1);
         const css = getComputedStyle(svg), v = n => css.getPropertyValue(n).trim();
         // 顏色來自 CSS：未解鎖 --map-off（不透明度 0.75；小地圖、彈窗不同）、界線 --c-surface、海岸線 --c-map-coast
@@ -704,10 +714,12 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             const item = state.idx[svg._level].get(code);
             const on = item && (svg._level === 'village' || item.unlocked);
             const name = svg._names?.get(code) || code;
-            pin = pin && interactive;
+            // 播放動畫中（svg._nameOnly）：只顯示名稱，不能補點（2026-11-27 維護者要求）
+            pin = pin && interactive && !svg._nameOnly;
             svg._pin = pin ? { code, x: cx, y: cy } : null;
             tip.classList.toggle('pinned', pin);
-            tip.innerHTML = `<b>${esc(name)}</b><br>${on ? `首次解鎖 ${fmtDate(item.first)}${item.n ? `<br>照片 ${fmtInt(item.n)} 張` : ''}` : '未解鎖'}`
+            tip.innerHTML = svg._nameOnly ? `<b>${esc(name)}</b>`
+                : `<b>${esc(name)}</b><br>${on ? `首次解鎖 ${fmtDate(item.first)}${item.n ? `<br>照片 ${fmtInt(item.n)} 張` : ''}` : '未解鎖'}`
                 + (pin ? tipManualHtml(svg, code) : '');
             tip.hidden = false;
             placeTip(tip, wrap, cx, cy);
@@ -857,6 +869,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
     // ---------- 放大彈窗：滾輪縮放、拖曳平移 ----------
 
     let modal = null;
+    // 放大彈窗上方的提示：精簡成一句（2026-11-27 手機回饋）；播放動畫中不能補點，只留縮放平移
+    const HINT_NORMAL = '可縮放平移・點區域可補點', HINT_PLAY = '可縮放平移';
 
     function buildModal() {
         modal = document.createElement('div');
@@ -866,7 +880,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             <div class="ex-modal-box" role="dialog" aria-modal="true" aria-labelledby="ex-modal-title">
                 <div class="ex-modal-head">
                     <span id="ex-modal-title" class="ex-modal-title"></span>
-                    <span class="ex-modal-hint">${TOUCH ? '雙指縮放・拖曳移動・連點放大・點區域可補點' : '滾輪縮放・拖曳移動・雙擊放大・點區域可補點'}</span>
+                    <span class="ex-modal-hint">${HINT_NORMAL}</span>
                     <span class="ex-modal-regions" role="group" aria-label="地區">${Object.entries(REGIONS).map(([k, r]) =>
                         `<button type="button" data-region="${k}">${r.label}</button>`).join('')}</span>
                     <span class="ex-modal-tools">
@@ -883,11 +897,13 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                         <button type="button" data-act="reset" title="縮放回本島全圖（不會刪除任何資料）">全圖</button>
                     </span>
                     <span class="ex-modal-tools ex-map-playbtn">
+                        <button type="button" data-act="video" class="ex-modal-video" title="把播放動畫存成影片（MP4）" hidden>🎬 匯出影片</button>
                         <button type="button" data-act="play" class="ex-modal-play" aria-pressed="false" title="依首次解鎖時間逐年（或逐月）播放迷霧散開的動畫" hidden>▶ 播放動畫</button>
                     </span>
                     <div class="ex-map-loading">載入地圖中…</div>
                     <div class="ex-tip" hidden></div>
                     <div class="ex-play-stamp" hidden aria-live="polite"><b></b><span></span></div>
+                    <div class="ex-video" hidden role="dialog" aria-label="匯出影片"></div>
                 </div>
                 <div class="ex-play" hidden>
                     <button type="button" data-act="play-toggle" class="ex-play-btn" aria-label="播放">▶</button>
@@ -1071,7 +1087,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
                 if (svg._cv) paintCanvas(svg);
             }
             else if (ds.region) goRegion(ds.region);
-            else if (act === 'play') { if (play) exitPlay(); else startPlay(0, true); }
+            else if (act === 'play') { if (play) exitPlay(); else startPlay(null, true); }
+            else if (act === 'video') openVideo();
             else if (act === 'play-toggle') togglePlay();
             else if (act === 'play-exit') exitPlay();
             else if (ds.pmode && play && ds.pmode !== play.mode) setPlayMode(ds.pmode);
@@ -1216,7 +1233,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
     function startPlay(at, auto) {
         const svg = modal.querySelector('svg');
         if (!PLAY_LEVELS.has(svg._level)) return;
-        // 從長條圖進來的 at 是年份：停在那一年的第一個月
+        // 從長條圖進來的 at 是年份：停在那一年的第一個月；at 為 null（按「播放動畫」）：從預設起點開始（defaultStart）
         play = { level: svg._level, county: 'all', mode: 'month', speed: 1, frames: [], i: 0, timer: 0, dim: null };
         if (play.level === 'village') {
             const list = villageCounties();
@@ -1229,9 +1246,11 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         modal.querySelector('.ex-play').hidden = false;
         modal.querySelector('.ex-play-stamp').hidden = false;
         modal.querySelector('.ex-modal-play').setAttribute('aria-pressed', 'true');
+        modal.querySelector('.ex-modal-video').hidden = false;
         modal.querySelector('.ex-modal-legend').innerHTML = playLegend();
+        setPlayingUi(svg, true);
         focusCounty();
-        goFrame(frameIndex(play.frames, at));
+        goFrame(at === null ? defaultStart() : frameIndex(play.frames, at));
         if (auto && !reduceMotion()) schedule();   // 減少動態效果：不自動播放，可以手動按 ▶ 或拖拉桿
         syncPlayBar();
     }
@@ -1239,10 +1258,34 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         if (!play) return;
         clearTimeout(play.timer);
         play = null;
+        closeVideo();
         modal.querySelector('.ex-play').hidden = true;
         modal.querySelector('.ex-play-stamp').hidden = true;
         modal.querySelector('.ex-modal-play').setAttribute('aria-pressed', 'false');
+        modal.querySelector('.ex-modal-video').hidden = true;
+        setPlayingUi(modal.querySelector('svg'), false);
         recolorModal();   // 回到原本的上色、界線與圖例
+    }
+    // 播放中：隱藏地區切換（CSS .ex-playing）、提示只留縮放平移、點區域只顯示名稱（不能補點）
+    function setPlayingUi(svg, on) {
+        modal.classList.toggle('ex-playing', on);
+        modal.querySelector('.ex-modal-hint').textContent = on ? HINT_PLAY : HINT_NORMAL;
+        svg._nameOnly = on;
+        svg._showTip(null);
+    }
+    /**
+     * 預設起點（2026-11-27 維護者要求）：找新解鎖最多的那一格（每年：那一年；每月：那個月），從前一年開始播
+     * —— 每年從高峰年的前一年、每月從高峰月往前 12 個月；早於第一格就從頭（全是迷霧）開始
+     */
+    function defaultStart() {
+        const fr = play.frames;
+        let best = -1;
+        fr.forEach((f, i) => { if (typeof f.key === 'number' && (best < 0 || f.n > fr[best].n)) best = i; });
+        if (best < 0) return 0;
+        const d = new Date(fr[best].start * 1000);
+        const from = play.mode === 'year' ? utc(d.getUTCFullYear() - 1) : utc(d.getUTCFullYear() - 1, d.getUTCMonth());
+        const i = fr.findIndex(f => f.start === from);
+        return i < 0 ? 0 : i;
     }
     // 資料更新後重新切格子，停在同一個時間
     function rebuildPlay() {
@@ -1307,7 +1350,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
     }
     function schedule() {
         clearTimeout(play.timer);
-        if (play.i >= play.frames.length - 1) goFrame(0);   // 在最後一格按播放：從頭開始
+        if (play.i >= play.frames.length - 1) goFrame(defaultStart());   // 在最後一格按播放：從預設起點重播
         const wait = (play.mode === 'year' ? 1000 : 500) / play.speed;
         play.timer = setTimeout(function tick() {
             if (!play) return;
@@ -1342,21 +1385,218 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         play.i = Math.max(0, Math.min(play.frames.length - 1, i));
         const f = play.frames[play.i];
         const fills = new Map();
-        let total = 0;
-        for (const t of playItems()) {
-            if (t.first >= f.end) continue;
-            total++;
-            fills.set(t.code, t.first >= f.start ? PLAY_NOW_COLOR : PLAY_PAST_COLOR);
-        }
-        svg._cv.fills = fills;
+        for (const t of playItems()) if (t.first < f.end) fills.set(t.code, t.first >= f.start ? PLAY_NOW_COLOR : PLAY_PAST_COLOR);
+        svg._cv.fills = fills;   // 匯出影片的 drawVideoFrame 也用這份
         svg._cv.dim = play.dim;                        // 村里：其他縣市淡灰
         svg._cv.noLines = play.level === 'village';    // 村里：不畫村里界線，只留縣市界
         paintCanvas(svg);
-        const stamp = modal.querySelector('.ex-play-stamp');
-        const where = play.level === 'village' ? (play.county === 'all' ? '全島・' : `${scopeName(play.county)}・`) : '';
-        stamp.querySelector('b').textContent = f.label;
-        stamp.querySelector('span').textContent = `${where}＋${f.n.toLocaleString()} 個${UNIT_LABEL[play.level]}・累積 ${total.toLocaleString()} 個`;
+        const stamp = modal.querySelector('.ex-play-stamp'), t = frameText(play.i);
+        stamp.querySelector('b').textContent = t.date;
+        stamp.querySelector('span').textContent = t.line;
         syncPlayBar();
+    }
+    // ---------- 匯出影片（播放動畫存成 MP4；2026-11-27 維護者要求，GIF 分享受限所以不用） ----------
+    // 錄一張不在畫面上的 canvas（按鈕、拉桿不會被錄進去）：上方暱稱（和成就卡片共用）、年月、＋幾個、累積；下方地圖
+    // 地圖範圍＝目前畫面上看得到的區域（村里選了縣市時只算那個縣市）放到影片裡；從拉桿目前的位置播到最後，速度跟播放列
+    // 比例（直式 9:16／方形 1:1）記在 localStorage fog-video；暱稱存在成就卡片的選項（fog-report）
+    const VIDEO_KEY = 'fog-video';
+    const VIDEO_SIZES = { portrait: [1080, 1920], square: [1080, 1080] };
+    const VFONT = '"Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif';
+    const loadVideoPref = () => { try { return JSON.parse(localStorage.getItem(VIDEO_KEY)) || {}; } catch (e) { return {}; } };
+    const saveVideoPref = o => { try { localStorage.setItem(VIDEO_KEY, JSON.stringify(o)); } catch (e) { /* 存不了只影響下次 */ } };
+    let video = null;   // { ratio, abort（錄製中）, blob, name }
+
+    const frameMs = () => (play.mode === 'year' ? 1000 : 500) / play.speed;
+    function videoRange() {
+        const from = play.i >= play.frames.length - 1 ? defaultStart() : play.i;
+        const n = play.frames.length - from;
+        return { from, n, ms: n * frameMs() + 3000 };   // 第一格多停 1 秒、最後一格多停 2 秒
+    }
+
+    function openVideo() {
+        if (!play) return;
+        pausePlay();
+        const box = modal.querySelector('.ex-video');
+        const pref = loadVideoPref();
+        video = { ratio: VIDEO_SIZES[pref.ratio] ? pref.ratio : 'portrait', abort: null, blob: null, name: '' };
+        if (!box._bound) {
+            box._bound = true;
+            box.addEventListener('click', e => {
+                const b = e.target.closest('button');
+                if (!b || !video) return;
+                if (b.dataset.vratio) { video.ratio = b.dataset.vratio; saveVideoPref({ ...loadVideoPref(), ratio: video.ratio }); syncVideo(); }
+                else if (b.dataset.vact === 'start') runVideo();
+                else if (b.dataset.vact === 'share') shareVideo();
+                else if (b.dataset.vact === 'close') closeVideo();
+            });
+            box.addEventListener('input', e => { if (e.target.classList.contains('ex-video-nick')) saveNickname(e.target.value.trim()); });
+            // 地圖的拖曳、點選、滾輪縮放不要穿透面板
+            for (const ev of ['pointerdown', 'pointerup', 'wheel', 'dblclick']) box.addEventListener(ev, e => e.stopPropagation());
+        }
+        const fmt = videoFormat();
+        if (!fmt) {
+            box.innerHTML = `<b class="ex-video-title">🎬 匯出影片</b><p class="ex-video-note">這個瀏覽器不支援錄製影片，請改用新版的 Chrome、Edge 或 iPhone 的 Safari。</p>
+                <div class="ex-video-btns"><button type="button" data-vact="close">關閉</button></div>`;
+            box.hidden = false;
+            return;
+        }
+        const { from, ms } = videoRange();
+        box.innerHTML = `<b class="ex-video-title">🎬 匯出影片</b>
+            <label class="ex-video-row"><span>標題</span><input type="text" class="ex-video-nick" maxlength="24" placeholder="例如：${esc(NICK_SAMPLE)}"></label>
+            <div class="ex-video-row"><span>比例</span><span class="ex-seg" role="group" aria-label="影片比例">
+                <button type="button" data-vratio="portrait">直式 9:16</button><button type="button" data-vratio="square">方形 1:1</button></span></div>
+            <p class="ex-video-note">從 ${esc(play.frames[from].label)} 播到最後（${play.speed}×），影片約 ${Math.round(ms / 1000)} 秒，${fmt.ext.toUpperCase()} 格式。
+                地圖範圍是目前畫面上看得到的地方。錄製要花和影片一樣長的時間，請不要切換到別的 App。</p>
+            <div class="ex-video-progress" hidden><i></i></div>
+            <div class="ex-video-btns">
+                <button type="button" data-vact="start" class="primary">開始錄製</button>
+                <button type="button" data-vact="close">取消</button>
+            </div>`;
+        box.querySelector('.ex-video-nick').value = loadNickname();
+        syncVideo();
+        box.hidden = false;
+    }
+    function syncVideo() {
+        modal.querySelectorAll('.ex-video [data-vratio]').forEach(b => b.classList.toggle('active', b.dataset.vratio === video.ratio));
+    }
+    function closeVideo() {
+        if (!video) return;
+        if (video.abort) video.abort.abort();
+        video = null;
+        modal.querySelector('.ex-video').hidden = true;
+    }
+
+    async function runVideo() {
+        const box = modal.querySelector('.ex-video');
+        const svg = modal.querySelector('svg');
+        const nick = box.querySelector('.ex-video-nick').value.trim();
+        const [W, H] = VIDEO_SIZES[video.ratio];
+        const { from, n } = videoRange();
+        const area = videoMapArea(svg);
+        const bar = box.querySelector('.ex-video-progress'), fill = bar.querySelector('i');
+        box.querySelectorAll('.ex-video-row, .ex-video-note').forEach(x => { x.hidden = true; });
+        bar.hidden = false;
+        box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">錄製中 0%</span><button type="button" data-vact="close">取消</button>`;
+        const status = box.querySelector('.ex-video-status');
+        const v = video;
+        v.abort = new AbortController();
+        const ms = frameMs();
+        try {
+            const out = await recordVideo({
+                width: W, height: H, count: n, signal: v.abort.signal,
+                holdMs: i => ms + (i === 0 ? 1000 : 0) + (i === n - 1 ? 2000 : 0),
+                draw: (ctx, i) => drawVideoFrame(ctx, svg, from + i, { W, H, nick, area }),
+                onProgress: r => { fill.style.width = `${Math.round(r * 100)}%`; status.textContent = `錄製中 ${Math.round(r * 100)}%`; },
+            });
+            if (video !== v) return;
+            v.abort = null;
+            v.blob = out.blob;
+            v.name = `台灣旅遊護照足跡動畫-${todayStr()}.${out.ext}`;
+            // 錄完要使用者再按一次才分享（手機的分享選單要剛點過按鈕才能開）
+            box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">完成（${(out.blob.size / 1048576).toFixed(1)} MB）</span>
+                <button type="button" data-vact="share" class="primary">${canShareFile() ? '📤 分享／儲存' : '⬇ 下載影片'}</button>
+                <button type="button" data-vact="close">關閉</button>`;
+        } catch (e) {
+            if (video !== v || (e && e.name === 'AbortError')) return;
+            v.abort = null;
+            box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">❌ 錄製失敗：${esc(e && e.message || String(e))}</span>
+                <button type="button" data-vact="close">關閉</button>`;
+        }
+    }
+    async function shareVideo() {
+        const { blob, name } = video;
+        const file = new File([blob], name, { type: blob.type });
+        if (canShareFile(file)) {
+            try { await navigator.share({ files: [file], title: name }); return; }
+            catch (e) { if (e.name === 'AbortError') return; }
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+
+    /** 影片裡地圖的範圍（地圖座標 [x0, y0, x1, y1]）：畫面上看得到、而且不是淡灰（其他縣市）的區域外框，四周留一點空 */
+    function videoMapArea(svg) {
+        const { r, vx, vy, s, ox, oy } = viewOf(svg);
+        const v0 = vx - ox * s, w0 = vy - oy * s, v1 = v0 + r.width * s, w1 = w0 + r.height * s;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const x of svg._cv.items) {
+            if (play.dim && play.dim.has(x.code)) continue;
+            const b = x.box;
+            if (b[2] < v0 || b[0] > v1 || b[3] < w0 || b[1] > w1) continue;
+            x0 = Math.min(x0, Math.max(b[0], v0)); y0 = Math.min(y0, Math.max(b[1], w0));
+            x1 = Math.max(x1, Math.min(b[2], v1)); y1 = Math.max(y1, Math.min(b[3], w1));
+        }
+        if (!(x1 > x0 && y1 > y0)) [x0, y0, x1, y1] = [v0, w0, v1, w1];
+        const m = Math.max(x1 - x0, y1 - y0) * 0.03;
+        return [x0 - m, y0 - m, x1 + m, y1 + m];
+    }
+
+    /** 影片的一格：底色（海）、上方文字、下方地圖（顏色跟著目前的淺色／深色主題） */
+    function drawVideoFrame(ctx, svg, i, { W, H, nick, area }) {
+        goFrame(i);   // 彈窗裡的地圖跟著走（也算好這一格的顏色 svg._cv.fills）
+        const css = getComputedStyle(svg), v = n => css.getPropertyValue(n).trim();
+        const t = frameText(i);
+        const u = W / 400;   // 影片 1 個「畫面點」幾個像素（線寬、字級以 400 點寬的手機畫面為準）
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = v('--c-sidebar-bg');
+        ctx.fillRect(0, 0, W, H);
+        // 上方文字：標題（暱稱，沒填就不印）、年月、範圍・＋幾個・累積
+        const pad = 22 * u;
+        let y = pad;
+        ctx.textBaseline = 'top';
+        ctx.textAlign = 'left';
+        const text = (str, size, weight, color) => {
+            ctx.font = `${weight} ${size * u}px ${VFONT}`;
+            ctx.fillStyle = color;
+            ctx.fillText(str, pad, y, W - pad * 2);
+            y += size * u * 1.35;
+        };
+        if (nick) { text(nick, 24, 'bold', v('--c-text')); y += 4 * u; }
+        text(t.date, 18, 'bold', v('--c-text'));
+        text(t.line, 13, 'normal', v('--c-text-muted'));
+        const top = y + 8 * u, foot = 26 * u;
+        // 頁尾：網站名稱
+        ctx.font = `normal ${10 * u}px ${VFONT}`;
+        ctx.fillStyle = v('--c-text-muted');
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('台灣旅遊護照', W - pad, H - 10 * u);
+        // 地圖：area 放進 (pad/2, top)–(W - pad/2, H - foot)，置中
+        const aw = W - pad, ah = H - foot - top;
+        const [x0, y0, x1, y1] = area;
+        const sm = Math.max((x1 - x0) / aw, (y1 - y0) / ah);   // 每個像素幾個地圖單位
+        const mx0 = (x0 + x1) / 2 - (W / 2) * sm, my0 = (y0 + y1) / 2 - (ah / 2) * sm;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, top, W, ah);
+        ctx.clip();
+        paintMapTo(ctx, svg, { mx0, my0, s: sm * u, dpr: u, w: W / u, h: ah / u, tx: 0, ty: top });
+        ctx.restore();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    /** 播放範圍的總面積（km²）：鄉鎮或全島＝全部縣市；村里選了縣市＝那個縣市（或合併的一組） */
+    function scopeArea() {
+        let a = 0;
+        for (const c of state.idx.county.values()) if (play.level === 'town' || play.county === 'all' || countyOf(c.code) === play.county) a += c.area || 0;
+        return a;
+    }
+    /**
+     * 第 i 格的文字：date「2026 年 11 月」；line「北北基・＋4 個村里・累積 1,356 個」（面積模式：累積 12.3% 面積）；
+     * add「＋4 個村里」、cum「累積…」、where「北北基」給匯出影片分開排版
+     */
+    function frameText(i) {
+        const f = play.frames[i];
+        let n = 0, area = 0;
+        for (const t of playItems()) if (t.first < f.end) { n++; area += t.area || 0; }
+        const all = scopeArea();
+        const cum = state.metric === 'area' && all > 0 ? `累積 ${fmtPct(area / all)} 面積` : `累積 ${n.toLocaleString()} 個`;
+        const where = play.level === 'village' ? (play.county === 'all' ? '全島' : scopeName(play.county)) : '';
+        const add = `＋${f.n.toLocaleString()} 個${UNIT_LABEL[play.level]}`;
+        return { date: f.label, add, cum, where, line: [where, add, cum].filter(Boolean).join('・') };
     }
 
     /**
@@ -1376,6 +1616,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const svg = modal.querySelector('svg'), level = svg._level, vb = svg._vb;
         if (!level) return;
         const m = await getMap(level);
+        if (play) return;   // 等地圖時又按了播放動畫：不要蓋掉播放的上色
         const [y0, y1] = drawMap(svg, m, level);
         if (vb) svg._draw(vb);
         modal.querySelector('.ex-modal-legend').innerHTML = legendHtml(y0, y1, level);
