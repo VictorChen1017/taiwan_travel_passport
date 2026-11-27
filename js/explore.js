@@ -15,7 +15,7 @@
 import { TIER_LABEL, ICONS, shapeOf, badgeColors, EARLY_YEAR, yearColor, PLAY_NOW_COLOR, PLAY_PAST_COLOR, CONQUER_LEVELS, conquerColor } from './shared.js';
 import { TILE } from './tiles.js';
 import { TOUCH, canShareFile } from './device.js';
-import { videoFormat, recordVideo } from './video.js';
+import { videoSupport, makeVideo } from './video.js';
 import { loadNickname, saveNickname, NICK_SAMPLE } from './report.js';
 import { sceneSvg, sceneEmoji, stampTilt } from './scenes.js';
 
@@ -1396,7 +1396,8 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         syncPlayBar();
     }
     // ---------- 匯出影片（播放動畫存成 MP4；2026-11-27 維護者要求，GIF 分享受限所以不用） ----------
-    // 錄一張不在畫面上的 canvas（按鈕、拉桿不會被錄進去）：上方暱稱（和成就卡片共用）、年月、＋幾個、累積；下方地圖
+    // 做法見 js/video.js：能用 WebCodecs 就一格一格交給編碼器（不用等實際時間、卡頓不會進影片），否則退回 MediaRecorder 即時錄
+    // 畫在不在畫面上的 canvas（按鈕、拉桿不會被錄進去）：上方暱稱（和成就卡片共用）、年月、＋幾個、累積；下方地圖
     // 地圖範圍＝目前畫面上看得到的區域（村里選了縣市時只算那個縣市）放到影片裡；從拉桿目前的位置播到最後，速度跟播放列
     // 比例（直式 9:16／方形 1:1）記在 localStorage fog-video；暱稱存在成就卡片的選項（fog-report）
     const VIDEO_KEY = 'fog-video';
@@ -1404,7 +1405,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
     const VFONT = '"Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif';
     const loadVideoPref = () => { try { return JSON.parse(localStorage.getItem(VIDEO_KEY)) || {}; } catch (e) { return {}; } };
     const saveVideoPref = o => { try { localStorage.setItem(VIDEO_KEY, JSON.stringify(o)); } catch (e) { /* 存不了只影響下次 */ } };
-    let video = null;   // { ratio, abort（錄製中）, blob, name }
+    let video = null;   // { ratio, fmt（videoSupport 的結果）, abort（製作中）, blob, name }
 
     const frameMs = () => (play.mode === 'year' ? 1000 : 500) / play.speed;
     function videoRange() {
@@ -1413,12 +1414,12 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         return { from, n, ms: n * frameMs() + 3000 };   // 第一格多停 1 秒、最後一格多停 2 秒
     }
 
-    function openVideo() {
+    async function openVideo() {
         if (!play) return;
         pausePlay();
         const box = modal.querySelector('.ex-video');
         const pref = loadVideoPref();
-        video = { ratio: VIDEO_SIZES[pref.ratio] ? pref.ratio : 'portrait', abort: null, blob: null, name: '' };
+        const v = video = { ratio: VIDEO_SIZES[pref.ratio] ? pref.ratio : 'portrait', fmt: null, abort: null, blob: null, name: '' };
         if (!box._bound) {
             box._bound = true;
             box.addEventListener('click', e => {
@@ -1433,9 +1434,10 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             // 地圖的拖曳、點選、滾輪縮放不要穿透面板
             for (const ev of ['pointerdown', 'pointerup', 'wheel', 'dblclick']) box.addEventListener(ev, e => e.stopPropagation());
         }
-        const fmt = videoFormat();
+        const fmt = v.fmt = await videoSupport(...VIDEO_SIZES.portrait);
+        if (video !== v || !play) return;   // 等待時已關掉
         if (!fmt) {
-            box.innerHTML = `<b class="ex-video-title">🎬 匯出影片</b><p class="ex-video-note">這個瀏覽器不支援錄製影片，請改用新版的 Chrome、Edge 或 iPhone 的 Safari。</p>
+            box.innerHTML = `<b class="ex-video-title">🎬 匯出影片</b><p class="ex-video-note">這個瀏覽器不支援製作影片，請改用新版的 Chrome、Edge 或 iPhone 的 Safari。</p>
                 <div class="ex-video-btns"><button type="button" data-vact="close">關閉</button></div>`;
             box.hidden = false;
             return;
@@ -1446,10 +1448,10 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
             <div class="ex-video-row"><span>比例</span><span class="ex-seg" role="group" aria-label="影片比例">
                 <button type="button" data-vratio="portrait">直式 9:16</button><button type="button" data-vratio="square">方形 1:1</button></span></div>
             <p class="ex-video-note">從 ${esc(play.frames[from].label)} 播到最後（${play.speed}×），影片約 ${Math.round(ms / 1000)} 秒，${fmt.ext.toUpperCase()} 格式。
-                地圖範圍是目前畫面上看得到的地方。錄製要花和影片一樣長的時間，請不要切換到別的 App。</p>
+                地圖範圍是目前畫面上看得到的地方。${fmt.engine === 'recorder' ? '這個瀏覽器要即時錄製，會花和影片一樣長的時間，請不要切換到別的 App。' : ''}</p>
             <div class="ex-video-progress" hidden><i></i></div>
             <div class="ex-video-btns">
-                <button type="button" data-vact="start" class="primary">開始錄製</button>
+                <button type="button" data-vact="start" class="primary">${fmt.engine === 'recorder' ? '開始錄製' : '產生影片'}</button>
                 <button type="button" data-vact="close">取消</button>
             </div>`;
         box.querySelector('.ex-video-nick').value = loadNickname();
@@ -1476,17 +1478,18 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const bar = box.querySelector('.ex-video-progress'), fill = bar.querySelector('i');
         box.querySelectorAll('.ex-video-row, .ex-video-note').forEach(x => { x.hidden = true; });
         bar.hidden = false;
-        box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">錄製中 0%</span><button type="button" data-vact="close">取消</button>`;
-        const status = box.querySelector('.ex-video-status');
         const v = video;
+        const doing = v.fmt.engine === 'recorder' ? '錄製中' : '產生中';
+        box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">${doing} 0%</span><button type="button" data-vact="close">取消</button>`;
+        const status = box.querySelector('.ex-video-status');
         v.abort = new AbortController();
         const ms = frameMs();
         try {
-            const out = await recordVideo({
+            const out = await makeVideo(v.fmt, {
                 width: W, height: H, count: n, signal: v.abort.signal,
                 holdMs: i => ms + (i === 0 ? 1000 : 0) + (i === n - 1 ? 2000 : 0),
                 draw: (ctx, i) => drawVideoFrame(ctx, svg, from + i, { W, H, nick, area }),
-                onProgress: r => { fill.style.width = `${Math.round(r * 100)}%`; status.textContent = `錄製中 ${Math.round(r * 100)}%`; },
+                onProgress: r => { fill.style.width = `${Math.round(r * 100)}%`; status.textContent = `${doing} ${Math.round(r * 100)}%`; },
             });
             if (video !== v) return;
             v.abort = null;
@@ -1499,7 +1502,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         } catch (e) {
             if (video !== v || (e && e.name === 'AbortError')) return;
             v.abort = null;
-            box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">❌ 錄製失敗：${esc(e && e.message || String(e))}</span>
+            box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">❌ 影片製作失敗：${esc(e && e.message || String(e))}</span>
                 <button type="button" data-vact="close">關閉</button>`;
         }
     }
