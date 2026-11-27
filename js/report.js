@@ -123,7 +123,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 // 繪圖工具：dry 為 true 時只量尺寸不畫
 // =====================================================================
 
-class Painter {
+export class Painter {
     constructor(ctx, colors) {
         this.ctx = ctx;
         this.c = colors;
@@ -751,7 +751,7 @@ const BLOCK_PAINT = {
 };
 
 /** 主題色（每次繪製時重新讀，切換深淺色後立即反映） */
-function themeColors() {
+export function themeColors() {
     const get = n => (window.photoTheme ? window.photoTheme.color(n) : getComputedStyle(document.documentElement).getPropertyValue(n)).trim();
     return {
         bg: get('--c-bg'), surface: get('--c-surface'), surface2: get('--c-surface-2'), surface3: get('--c-surface-3'),
@@ -761,6 +761,21 @@ function themeColors() {
         fog: get('--c-fog'), fogLine: get('--c-fog-line'), badgeOff: get('--c-badge-off'), badgeOffRing: get('--c-badge-off-ring'),
         festStamp: get('--c-fest-stamp'), festStampBg: get('--c-fest-stamp-bg'),
     };
+}
+
+/** 手機可分享就開分享選單，否則下載（旅行建議的任務卡也用） */
+export async function deliverFile(blob, filename) {
+    const file = new File([blob], filename, { type: blob.type });
+    if (canShareFile(file)) {
+        try { await navigator.share({ files: [file], title: filename }); document.dispatchEvent(new Event('reportsaved')); return; }
+        catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    document.dispatchEvent(new Event('reportsaved'));   // 首頁「匯出卡片」打勾
 }
 
 /**
@@ -1017,7 +1032,7 @@ export function createReport({ getStats, loadMap, getMeta }) {
         const out = (o.nickname || '').trim() ? last : renderReport(paintOpts(), { stats: getStats(), meta: getMeta(), maps });
         const blob = await new Promise(res => out.canvas.toBlob(res, 'image/png'));
         if (!blob) { alert('無法產生圖片（可能是內容太長），請減少區塊後再試。'); return; }
-        await deliver(blob, `台灣旅遊護照成就報表-${todayStr()}.png`);
+        await deliverFile(blob, `台灣旅遊護照成就報表-${todayStr()}.png`);
     }
 
     /** 節慶與民俗活動動圖：產生 GIF 後分享或下載 */
@@ -1031,28 +1046,13 @@ export function createReport({ getStats, loadMap, getMeta }) {
             await new Promise(r => setTimeout(r, 30));   // 先讓按鈕文字更新
             const blob = renderFestivalGif(paintOpts(), { stats: getStats(), meta: getMeta(), maps });
             if (!blob) { alert('沒有要分享的集章卡（還沒有成就，或進階選項全部關掉了）。'); return; }
-            await deliver(blob, `台灣旅遊護照節慶與民俗活動-${todayStr()}.gif`);
+            await deliverFile(blob, `台灣旅遊護照節慶與民俗活動-${todayStr()}.gif`);
         } catch (e) {
             alert('動圖產生失敗：' + (e && e.message || e));
         } finally {
             btn.disabled = false;
             btn.textContent = label;
         }
-    }
-
-    /** 手機可分享就開分享選單，否則下載 */
-    async function deliver(blob, filename) {
-        const file = new File([blob], filename, { type: blob.type });
-        if (canShareFile(file)) {
-            try { await navigator.share({ files: [file], title: filename }); document.dispatchEvent(new Event('reportsaved')); return; }
-            catch (e) { if (e.name === 'AbortError') return; }
-        }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = filename;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-        document.dispatchEvent(new Event('reportsaved'));   // 首頁「匯出卡片」打勾
     }
 
     function open() {

@@ -12,6 +12,7 @@ import { exportBackup, parseBackup } from './backup.js';
 import * as manual from './manual.js';
 import { GROUP_COLOR } from './shared.js';
 import { createReport } from './report.js';
+import { createSuggest } from './suggest.js';
 import { TOUCH } from './device.js';
 import { openGuide, guideSeen } from './guide.js';
 import { startTour, endTour, tourSeen } from './tour.js';
@@ -72,13 +73,15 @@ function ensureReady() {
     return app.ready;
 }
 
-function loadMap(level) {
-    const name = `map_${level}.json`;
+/** data/ 底下的檔案（version.json 的雜湊當查詢參數） */
+function loadData(name) {
     return fetch(`${DATA}${name}?v=${app.version?.files?.[name] || ''}`).then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) throw new Error(`無法載入 ${name}（HTTP ${r.status}）`);
         return r.json();
     });
 }
+
+const loadMap = level => loadData(`map_${level}.json`);
 
 // ---------- 計算 ----------
 
@@ -146,6 +149,7 @@ async function compute({ show = true } = {}) {
             });
         }
         app.explore.setData(stats);
+        app.suggest?.refresh();
         renderModeSeg();
         renderToc();
         if (show) showExplore();
@@ -600,6 +604,15 @@ async function openReport() {
     app.report.open();
 }
 
+// ---------- 旅行建議（js/suggest.js） ----------
+
+async function openSuggest() {
+    if (!app.explore || !app.explore.data()) await compute({ show: false });
+    if (!app.explore || !app.explore.data()) return;
+    if (!app.suggest) app.suggest = createSuggest({ getStats: () => app.explore.data(), loadData, addManual });
+    app.suggest.open();
+}
+
 function renderModeSeg() {
     const seg = $('modeSeg');
     // 有照片才能選照片模式；只有時間軸時固定造訪模式
@@ -620,6 +633,7 @@ function renderToc() {
         <button type="button" class="app-btn primary toc-import" data-act="view">🏅 查看成就</button>
         <button type="button" class="app-btn toc-import" data-act="import">📂 匯入資料</button>
         <button type="button" class="app-btn toc-report" data-act="report">📤 分享成就</button>
+        <button type="button" class="app-btn toc-report" data-act="suggest">🎲 旅行建議</button>
         <button type="button" class="app-btn toc-report" data-act="tour">▶ 頁面導覽</button>
         <a class="app-btn toc-report toc-help" href="help.html" target="_blank" rel="noopener">❓ 使用說明</a>
         ${ready && hasPathRecords() && app.mode !== 'photo' ? `<label class="app-check toc-path">
@@ -746,6 +760,7 @@ function bindUi() {
         if (e.target.closest('.toc-path')) return;
         if (e.target.closest('[data-act="import"]')) { openToc(false); showLanding(); return; }
         if (e.target.closest('[data-act="report"]')) { openToc(false); openReport(); return; }
+        if (e.target.closest('[data-act="suggest"]')) { openToc(false); openSuggest(); return; }
         if (e.target.closest('[data-act="tour"]')) { openToc(false); replayTour(); return; }
         const view = e.target.closest('[data-act="view"]');
         const a = e.target.closest('a');

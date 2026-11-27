@@ -4,7 +4,7 @@
 // 用法（在專案根目錄）：
 //   C:/xampp/php/php.exe tools/export_static.php            全部匯出
 //   C:/xampp/php/php.exe tools/export_static.php units rail 只匯出指定項目
-// 項目：units、maps、villages、areas、achievements、peaks、rail（每次都會更新 version.json）
+// 項目：units、maps、villages、areas、achievements、peaks、rail、suggest（每次都會更新 version.json）
 //
 // 來源：
 //   - 界線、保護區、車站：PostGIS photo_monitor 資料庫（只讀；連線設定見 tools/lib.php）
@@ -509,6 +509,114 @@ if ($want('rail')) {
 }
 
 // ======================================================================
+// suggest.json：旅行建議（鄉鎮相鄰表＋各鄉鎮裡的目標；SPEC §15.7「旅行建議」）
+// 目標讀已匯出的 achievements／peaks／rail.json（id、索引與前端一致），所以要在那三項之後
+// ======================================================================
+
+if ($want('suggest')) {
+    echo "suggest\n";
+    $fix = require CFG . '/suggest.php';
+    $towns = $pg->query('SELECT towncode FROM towns ORDER BY towncode')->fetchAll(PDO::FETCH_COLUMN);
+    $isTown = array_flip($towns);
+    $key = fn(string $a, string $b) => $a < $b ? "$a|$b" : "$b|$a";
+
+    // 邊界相鄰：共用邊長 > 1 公尺（只碰到一個點的不算）
+    $border = [];
+    foreach ($pg->query("SELECT a.towncode AS a, b.towncode AS b
+                         FROM towns a JOIN towns b ON a.towncode < b.towncode AND a.geom && b.geom AND ST_Intersects(a.geom, b.geom)
+                         WHERE ST_Length(ST_CollectionExtract(ST_Intersection(a.geom, b.geom), 2)::geography) > 1") as $r) {
+        $border[$key($r['a'], $r['b'])] = 'b';
+    }
+    printf("  邊界相鄰 %d 對\n", count($border));
+
+    $pairs = $border;
+    foreach ($fix['remove'] as [$a, $b]) {
+        foreach ([$a, $b] as $c) if (!isset($isTown[$c])) warn("remove：找不到鄉鎮 $c");
+        if (!isset($border[$key($a, $b)])) warn("remove：$a ↔ $b 原本就不相鄰");
+        unset($pairs[$key($a, $b)]);
+    }
+    foreach ($fix['add'] as [$a, $b, $m]) {
+        foreach ([$a, $b] as $c) if (!isset($isTown[$c])) warn("add：找不到鄉鎮 $c");
+        if (!in_array($m, ['land', 'sea', 'air'], true)) warn("add：$a ↔ $b 方式 $m 不認得");
+        // 原本就相鄰：land 不必加；sea／air 是把方式改成要搭船、搭飛機（例：旗津 ↔ 鼓山隔著港口）
+        if (isset($border[$key($a, $b)]) && $m === 'land') warn("add：$a ↔ $b 原本就相鄰，不必加");
+        $pairs[$key($a, $b)] = $m[0];   // l／s／a
+    }
+    $neighbors = [];
+    foreach ($pairs as $k => $m) {
+        [$a, $b] = explode('|', $k);
+        $neighbors[$a][$b] = $m;
+        $neighbors[$b][$a] = $m;
+    }
+    ksort($neighbors);
+    foreach ($neighbors as &$n) ksort($n);
+    unset($n);
+    $lonely = array_diff($towns, array_keys($neighbors));
+    if ($lonely) echo '  沒有鄰居的鄉鎮：' . implode('、', $lonely) . "\n";
+
+    $hints = [];
+    foreach ($fix['hint'] as [$t, $m, $from]) {
+        if (!isset($isTown[$t])) warn("hint：找不到鄉鎮 $t");
+        $hints[$t][] = [$m[0], $from];
+    }
+
+    // 目標：點位 → 所在鄉鎮（落在海上的取最近的鄉鎮）
+    $ach = json_decode(file_get_contents(OUT . '/achievements.json'), true);
+    $peaks = json_decode(file_get_contents(OUT . '/peaks.json'), true);
+    $rail = json_decode(file_get_contents(OUT . '/rail.json'), true);
+    $pts = [];   // [目標, 緯度, 經度]
+    foreach ($peaks['lists'] as $l) foreach ($l['peaks'] as $p) $pts[] = [['peak', $l['id'], $p[0]], $p[2], $p[3]];
+    foreach ($rail['stations'] as $i => $s) foreach ($s['pts'] as $p) $pts[] = [['st', $i], $p[0], $p[1]];
+    foreach ($ach['places'] as $p) foreach ($p['points'] ?? [] as $q) $pts[] = [['place', $p['id']], $q[0], $q[1]];
+    foreach ($ach['festivals'] as $f) {
+        if ($f['kind'] === 'places') foreach ($f['places'] as $q) $pts[] = [['fest', $f['id'], $q['code']], $q['lat'], $q['lng']];
+        else foreach ($f['points'] as $q) $pts[] = [['fest', $f['id']], $q[0], $q[1]];
+    }
+    $targets = [];
+    $seen = [];
+    $addT = function (string $t, array $g) use (&$targets, &$seen) {
+        $k = $t . json_encode($g);
+        if (isset($seen[$k])) return;
+        $seen[$k] = true;
+        $targets[$t][] = $g;
+    };
+    foreach (array_chunk($pts, 500, true) as $chunk) {
+        $vals = implode(',', array_map(fn($i, $p) => sprintf('(%d,%F,%F)', $i, $p[1], $p[2]), array_keys($chunk), $chunk));
+        foreach ($pg->query("WITH p(i, lat, lng) AS (VALUES $vals)
+                             SELECT p.i, t.towncode FROM p CROSS JOIN LATERAL (
+                               SELECT towncode FROM towns ORDER BY geom <-> ST_SetSRID(ST_MakePoint(p.lng, p.lat), 4326) LIMIT 1) t") as $r) {
+            $addT($r['towncode'], $pts[(int)$r['i']][0]);
+        }
+    }
+    // 以村里判定的地點：村里代碼前 8 碼；以範圍判定的（國家公園、保護區）：和範圍重疊 ≥ 0.05 km² 的鄉鎮
+    foreach ($ach['places'] as $p) {
+        foreach ($p['villages'] ?? [] as $v) $addT(substr($v, 0, 8), ['place', $p['id']]);
+        if (isset($p['areas'])) {
+            $in = implode(',', array_map([$pg, 'quote'], $p['areas']));
+            foreach ($pg->query("SELECT DISTINCT t.towncode FROM towns t JOIN protected_areas a ON a.code IN ($in) AND a.geom && t.geom
+                                 WHERE ST_Area(ST_Intersection(a.geom, t.geom)::geography) >= 5e4") as $r) {
+                $addT($r['towncode'], ['area', $p['id']]);
+            }
+        }
+    }
+    ksort($targets);
+    printf("  有目標的鄉鎮 %d、目標 %d 筆\n", count($targets), array_sum(array_map('count', $targets)));
+
+    write_json('suggest.json', [
+        '_format' => [
+            'neighbors' => '{towncode: {鄰居 towncode: 方式}}；b＝邊界相鄰、l＝隧道或橋、s＝船班、a＝航班（tools/config/suggest.php 修正後）',
+            'hints' => '{towncode: [[方式, 起點說明]]}：只提示、不算鄰居的交通方式',
+            'targets' => '{towncode: [目標]}；[peak, 清單 id, 編號]／[st, 車站索引]／[place, 成就 id]／[area, 成就 id]（範圍判定，跨多個鄉鎮）／[fest, 成就 id]／[fest, 成就 id, 地點代號]',
+            'fixes' => '設定檔的修正（selftest 檢查有套用）',
+        ],
+        'neighbors' => $neighbors,
+        'hints' => $hints,
+        'targets' => $targets,
+        'fixes' => ['add' => $fix['add'], 'remove' => $fix['remove']],
+    ]);
+}
+
+// ======================================================================
 // version.json：資料版本（前端版本不同時重新下載並重算）
 // ======================================================================
 
@@ -521,7 +629,9 @@ foreach (glob(OUT . '/*.json') as $f) {
     $files[basename($f)] = substr(md5_file($f), 0, 8);
     $sizes[basename($f)] = filesize($f);
 }
-$changed = ($prev['files'] ?? null) !== $files;
+// 不影響計算結果的檔案（水系、旅行建議）變了不更新版本號，使用者不必重算
+$noRecalc = array_flip(['map_water.json', 'suggest.json']);
+$changed = array_diff_key($prev['files'] ?? [], $noRecalc) !== array_diff_key($files, $noRecalc);
 write_json('version.json', [
     'version' => $changed ? date('YmdHis') : ($prev['version'] ?? date('YmdHis')),
     'files' => $files,

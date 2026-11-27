@@ -93,6 +93,8 @@ export const YEAR_COLOR_FROM = 'rgb(255,226,205)', YEAR_COLOR_TO = 'rgb(232,74,2
 export const YEARLY_BAR_COLOR = '#ff8a5c';   // 每年新解鎖長條
 // 放大地圖逐年播放只用兩色：這一格新解鎖（同每年新解鎖長條的橘）、之前已解鎖（淺橘）；未解鎖是迷霧
 export const PLAY_NOW_COLOR = YEARLY_BAR_COLOR, PLAY_PAST_COLOR = '#ffd8c4';
+// 旅行建議的小地圖：抽中的鄉鎮（深橘）、去過的鄉鎮（淺橘，同播放的「之前已解鎖」）；其他是迷霧
+export const SUGGEST_PICK_COLOR = YEAR_COLOR_TO, SUGGEST_VISITED_COLOR = PLAY_PAST_COLOR;
 
 // 制霸五色（照片模式，鄉鎮・村里）：依照片張數上色；0 張＝迷霧（主題色 --c-fog）
 // min：達到這個張數起用這個顏色；label：圖例的張數區間

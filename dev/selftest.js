@@ -6,6 +6,7 @@ import { FogClient } from '../js/core/client.js';
 import * as manual from '../js/manual.js';
 import { exportBackup, parseBackup } from '../js/backup.js';
 import { renderReport, renderFestivalGif, PRESETS, BLOCKS, subsOf, DEFAULT_SUB_OFF } from '../js/report.js';
+import { candidatesOf } from '../js/suggest.js';
 
 // 基準值：原專案照片（test/legacy/photos.json）在 2026-11-26 圖資下的結果
 // （2026-11-26 換成內政部未簡化原檔、不留縫簡化：村里 1287 → 1289，邊界附近 11 個新進、9 個移出）
@@ -13,6 +14,7 @@ const BASE = {
     county: [19, 22], town: [219, 368], village: [1289, 7975],
     photoAchievements: [71, 260],    // 照片模式：達成 / 總數（含「老地方」；2026-11-26 起含新北撒旦城、月老巡禮，測試照片都有去過）
     yushanVillage: '10008120011',    // 玉山主峰所在村里（東埔村）；照片裡沒有
+    suggestCandidates: 120,          // 旅行建議：測試照片去過的 219 個鄉鎮往外相鄰、還沒去過的鄉鎮數（2026-11-27）
 };
 
 const DATA = new URL('../data/', location.href).href;
@@ -382,6 +384,55 @@ async function run() {
         const one = renderReport({ ...vb, vCounty: c.code }, env).height;
         const ok = on === off + 22 && one - all === (towns - stats.counties.length) * 34;
         return res(ok, `每年新解鎖：有曲線 ${on}、無曲線 ${off} px；村里進度：各縣市 ${all}、${c.name}（${towns} 鄉鎮）${one} px`);
+    });
+
+    // ---------- 旅行建議（data/suggest.json、js/suggest.js） ----------
+    let sug;
+    await check('旅行建議', '相鄰表對稱、方式代碼正確、本島鄉鎮都有鄰居（烏坵除外）', async () => {
+        sug = await fetch(DATA + 'suggest.json').then(r => r.json());
+        const nb = sug.neighbors, bad = [];
+        for (const [a, m] of Object.entries(nb)) for (const [b, w] of Object.entries(m)) {
+            if (nb[b]?.[a] !== w) bad.push(`${a}↔${b}`);
+            if (!'blsa'.includes(w) || w.length !== 1) bad.push(`${a}↔${b} 方式 ${w}`);
+        }
+        const lonely = base.towns.map(t => t.code).filter(c => !nb[c] || !Object.keys(nb[c]).length);
+        const ok = !bad.length && lonely.length === 1 && lonely[0] === '09020060';
+        return res(ok, `鄉鎮 ${Object.keys(nb).length}、相鄰 ${Object.values(nb).reduce((s, m) => s + Object.keys(m).length, 0) / 2} 對；不對稱 ${bad.length}；沒有鄰居 ${lonely.join('、')}`);
+    });
+    await check('旅行建議', '設定檔的排除與加入都有套用（茂林 ↔ 延平不相鄰、旗津 ↔ 鼓山搭船）', async () => {
+        const nb = sug.neighbors;
+        const miss = [];
+        for (const [a, b] of sug.fixes.remove) if (nb[a]?.[b]) miss.push(`remove ${a}↔${b}`);
+        for (const [a, b, m] of sug.fixes.add) if (nb[a]?.[b] !== m[0]) miss.push(`add ${a}↔${b}`);
+        const ok = !miss.length && !nb['64000360']?.['10014130'] && nb['64000100']?.['64000020'] === 's' && nb['10014160']?.['10014010'] === 's';
+        return res(ok, miss.length ? miss.join('、') : `排除 ${sug.fixes.remove.length}、加入 ${sug.fixes.add.length} 筆都有套用`);
+    });
+    await check('旅行建議', '目標對應：玉山在信義或桃源、仁愛鄉有武嶺與 11 座百岳、每個車站都有鄉鎮', async () => {
+        const T = sug.targets, has = (t, g) => (T[t] || []).some(x => JSON.stringify(x) === JSON.stringify(g));
+        const yushan = has('10008120', ['peak', 'peaks_baiyue', 1]) || has('64000370', ['peak', 'peaks_baiyue', 1]);
+        const ren = T['10008130'] || [];
+        const renPeaks = ren.filter(g => g[0] === 'peak' && g[1] === 'peaks_baiyue').length;
+        const rail = await fetch(DATA + 'rail.json').then(r => r.json());
+        const st = new Set(Object.values(T).flat().filter(g => g[0] === 'st').map(g => g[1]));
+        const ok = yushan && has('10008130', ['place', 'peak_wuling']) && renPeaks === 11 && st.size === rail.stations.length;
+        return res(ok, `玉山 ${yushan ? '有' : '沒有'}、仁愛鄉百岳 ${renPeaks} 座、車站 ${st.size}/${rail.stations.length}`);
+    });
+    await check('旅行建議', '候選：測試照片往外相鄰、還沒去過的鄉鎮數；去過的不會被抽到', async () => {
+        const visited = new Set(base.towns.filter(t => t.unlocked).map(t => t.code));
+        const r = candidatesOf(visited, sug.neighbors);
+        const noVisited = r.list.every(c => !visited.has(c));
+        // 全部去過、相鄰都去過時退回同縣市：只去過澎湖馬公 → 候選含望安等，且都不是馬公
+        const one = candidatesOf(new Set(['10016010']), sug.neighbors);
+        const ok = r.list.length === BASE.suggestCandidates && noVisited && !r.fallback && one.list.includes('10016050') && !one.list.includes('10016010');
+        return res(ok, `去過 ${visited.size}、候選 ${r.list.length}（基準 ${BASE.suggestCandidates}）；只去過馬公時候選 ${one.list.length} 個`);
+    });
+    await check('旅行建議', '相鄰都去過時退回同縣市沒去過的鄉鎮（沒有鄰居的烏坵不抽）', async () => {
+        // 假想：只去過金寧與烈嶼，相鄰表裡金寧、烈嶼只和彼此相鄰（其他鄉鎮沿用真的相鄰表）
+        const nb = { ...sug.neighbors, '09020040': { '09020050': 'l' }, '09020050': { '09020040': 'l' } };
+        const countyOf = c => c.slice(0, 5);
+        const r = candidatesOf(new Set(['09020040', '09020050']), nb, { countyOf, allTowns: base.towns.map(t => t.code) });
+        const ok = r.fallback && r.list.length === 3 && r.list.every(c => c.startsWith('09020')) && !r.list.includes('09020060');
+        return res(ok, `退回同縣市：${r.list.join('、')}`);
     });
 }
 

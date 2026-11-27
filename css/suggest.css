@@ -1,0 +1,345 @@
+/* 旅行建議（js/suggest.js）：外框沿用 css/report.css 的 .rp-modal／.rp-box／.rp-head／.rp-foot
+   介面色一律用 css/theme.css 的 --c-*；地圖的資料色在 js/shared.js
+   寬度分界只用 640／900／1200（規則見 js/device.js 開頭） */
+
+.sg-box {
+    width: min(980px, 100%);
+}
+
+.sg-main {
+    flex: 1;
+    min-height: 0;
+    padding: 18px 20px 24px;
+    overflow-y: auto;
+}
+
+.sg-empty {
+    padding: 40px 10px;
+    font-size: calc(15px * var(--fs, 1));
+    line-height: 1.7;
+    color: var(--c-text-muted);
+    text-align: center;
+}
+
+.sg-banner {
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text-strong);
+    background: var(--c-active-soft);
+    border: 1px solid var(--c-active-border);
+    border-radius: 10px;
+}
+
+.sg-kicker {
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.sg-title h3 {
+    margin: 2px 0 4px;
+    font-size: calc(24px * var(--fs, 1));
+    font-weight: normal;
+    color: var(--c-text-strong);
+}
+
+.sg-title h3 b {
+    font-size: calc(30px * var(--fs, 1));
+}
+
+.sg-via {
+    margin: 0 0 12px;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.sg-maplink {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 8px;
+    font-size: calc(12.5px * var(--fs, 1));
+    font-weight: normal;
+    color: var(--c-link);
+    white-space: nowrap;
+    text-decoration: none;
+    vertical-align: middle;
+    border: 1px solid var(--c-border-strong);
+    border-radius: 999px;
+}
+
+.sg-maplink:hover {
+    background: var(--c-link-hover-bg);
+}
+
+.sg-title .sg-maplink {
+    margin-left: 6px;
+    font-size: calc(13.5px * var(--fs, 1));
+}
+
+.sg-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 10px;
+}
+
+.sg-map {
+    height: calc(300px * var(--fs, 1));
+    overflow: hidden;
+    background: var(--c-map-bg);
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+}
+
+.sg-map svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.sg-map path {
+    stroke: var(--c-fog-line);
+    stroke-width: 0.6px;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+}
+
+.sg-side h4,
+.sg-h,
+.sg-wishlist h4 {
+    margin: 0 0 8px;
+    font-size: calc(15px * var(--fs, 1));
+    color: var(--c-text-strong);
+}
+
+.sg-h {
+    margin-top: 16px;
+}
+
+.sg-side h4 + * {
+    margin-bottom: 14px;
+}
+
+.sg-h small,
+.sg-wishlist h4 small {
+    font-weight: normal;
+    color: var(--c-text-muted);
+}
+
+.sg-prog {
+    padding-left: 18px;
+    margin: 0;
+    font-size: calc(14px * var(--fs, 1));
+    line-height: 1.7;
+}
+
+.sg-prog li.hit {
+    font-weight: bold;
+    color: var(--c-accent);
+}
+
+.sg-ways {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+    margin: 0;
+    font-size: calc(14px * var(--fs, 1));
+    line-height: 1.6;
+}
+
+.sg-ways dt {
+    color: var(--c-text-muted);
+    white-space: nowrap;
+}
+
+.sg-ways dd {
+    margin: 0;
+}
+
+.sg-group {
+    margin-bottom: 10px;
+}
+
+.sg-glabel {
+    margin-bottom: 4px;
+    font-size: calc(14px * var(--fs, 1));
+    font-weight: bold;
+    color: var(--g, var(--c-text-muted));
+}
+
+.sg-list {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.sg-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 10px;
+    padding: 6px 4px 6px 14px;
+    font-size: calc(14.5px * var(--fs, 1));
+    border-bottom: 1px solid var(--c-border);
+}
+
+.sg-list li.done .sg-name {
+    color: var(--c-text-muted);
+}
+
+.sg-sub {
+    font-size: calc(12.5px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.sg-acts {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.sg-addbtn {
+    padding: 2px 10px;
+    font: inherit;
+    font-size: calc(13px * var(--fs, 1));
+    color: var(--c-accent);
+    white-space: nowrap;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid var(--c-accent);
+    border-radius: 999px;
+}
+
+.sg-addbtn:hover {
+    color: var(--c-on-accent);
+    background: var(--c-accent);
+}
+
+.sg-add {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.sg-add input {
+    padding: 4px 6px;
+    font: inherit;
+    font-size: calc(13px * var(--fs, 1));
+    color: var(--c-text);
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-border-strong);
+    border-radius: 6px;
+}
+
+.sg-add .rp-btn {
+    padding: 4px 12px;
+    font-size: calc(13px * var(--fs, 1));
+}
+
+.sg-none {
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text-muted);
+}
+
+.sg-done {
+    margin-top: 10px;
+}
+
+.sg-done summary {
+    margin-bottom: 6px;
+    font-size: calc(14px * var(--fs, 1));
+    color: var(--c-text-muted);
+    cursor: pointer;
+}
+
+.sg-wishlist {
+    padding-top: 14px;
+    margin-top: 20px;
+    border-top: 1px solid var(--c-border);
+}
+
+.sg-wishlist ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.sg-wishlist li {
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    background: var(--c-surface-2);
+    border: 1px solid var(--c-border);
+    border-radius: 999px;
+}
+
+.sg-wishlist li.cur {
+    border-color: var(--c-accent);
+}
+
+.sg-wgo,
+.sg-wdel {
+    padding: 5px 12px;
+    font: inherit;
+    font-size: calc(13.5px * var(--fs, 1));
+    color: var(--c-text);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+}
+
+.sg-wgo small {
+    color: var(--c-text-muted);
+}
+
+.sg-wdel {
+    padding: 5px 10px 5px 4px;
+    color: var(--c-text-faint);
+}
+
+.sg-wgo:hover,
+.sg-wdel:hover {
+    background: var(--c-hover);
+}
+
+.sg-opt {
+    margin-right: auto;
+    font-size: calc(13.5px * var(--fs, 1));
+}
+
+#sg-wish.on {
+    border-color: var(--c-accent);
+}
+
+@media (max-width: 640px) {
+    .sg-main {
+        padding: 14px 14px 20px;
+    }
+
+    .sg-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sg-map {
+        height: 220px;
+    }
+
+    .sg-box .rp-foot {
+        flex-wrap: wrap;
+    }
+
+    .sg-opt {
+        flex-basis: 100%;
+    }
+
+    .sg-box .rp-foot .rp-btn {
+        flex: 1;
+        padding: 7px 8px;
+    }
+}
