@@ -1383,10 +1383,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         const svg = modal.querySelector('svg');
         if (!play || !svg._cv || svg._level !== play.level) return;
         play.i = Math.max(0, Math.min(play.frames.length - 1, i));
-        const f = play.frames[play.i];
-        const fills = new Map();
-        for (const t of playItems()) if (t.first < f.end) fills.set(t.code, t.first >= f.start ? PLAY_NOW_COLOR : PLAY_PAST_COLOR);
-        svg._cv.fills = fills;   // 匯出影片的 drawVideoFrame 也用這份
+        svg._cv.fills = fillsAt(play.i);
         svg._cv.dim = play.dim;                        // 村里：其他縣市淡灰
         svg._cv.noLines = play.level === 'village';    // 村里：不畫村里界線，只留縣市界
         paintCanvas(svg);
@@ -1479,24 +1476,34 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         box.querySelectorAll('.ex-video-row, .ex-video-note').forEach(x => { x.hidden = true; });
         bar.hidden = false;
         const v = video;
+        // 用實際要輸出的尺寸再確認一次（有些電腦的硬體編碼器只接受部分尺寸；不行才退回即時錄製）
+        if (v.fmt.engine === 'webcodecs') {
+            const f = await videoSupport(W, H);
+            if (video !== v) return;
+            if (f) v.fmt = f;
+        }
         const doing = v.fmt.engine === 'recorder' ? '錄製中' : '產生中';
         box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">${doing} 0%</span><button type="button" data-vact="close">取消</button>`;
         const status = box.querySelector('.ex-video-status');
         v.abort = new AbortController();
         const ms = frameMs();
+        const t0 = performance.now();
         try {
             const out = await makeVideo(v.fmt, {
                 width: W, height: H, count: n, signal: v.abort.signal,
                 holdMs: i => ms + (i === 0 ? 1000 : 0) + (i === n - 1 ? 2000 : 0),
                 draw: (ctx, i) => drawVideoFrame(ctx, svg, from + i, { W, H, nick, area }),
-                onProgress: r => { fill.style.width = `${Math.round(r * 100)}%`; status.textContent = `${doing} ${Math.round(r * 100)}%`; },
+                onProgress: (r, k) => {
+                    fill.style.width = `${Math.round(r * 100)}%`;
+                    status.textContent = `${doing}：第 ${k} / ${n} 格（${Math.round(r * 100)}%），已花 ${((performance.now() - t0) / 1000).toFixed(1)} 秒`;
+                },
             });
             if (video !== v) return;
             v.abort = null;
             v.blob = out.blob;
             v.name = `台灣旅遊護照足跡動畫-${todayStr()}.${out.ext}`;
             // 錄完要使用者再按一次才分享（手機的分享選單要剛點過按鈕才能開）
-            box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">完成（${(out.blob.size / 1048576).toFixed(1)} MB）</span>
+            box.querySelector('.ex-video-btns').innerHTML = `<span class="ex-video-status">完成（${(out.blob.size / 1048576).toFixed(1)} MB，花 ${((performance.now() - t0) / 1000).toFixed(1)} 秒）</span>
                 <button type="button" data-vact="share" class="primary">${canShareFile() ? '📤 分享／儲存' : '⬇ 下載影片'}</button>
                 <button type="button" data-vact="close">關閉</button>`;
         } catch (e) {
@@ -1520,15 +1527,23 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         setTimeout(() => URL.revokeObjectURL(url), 10000);
     }
 
-    /** 影片裡地圖的範圍（地圖座標 [x0, y0, x1, y1]）：畫面上看得到、而且不是淡灰（其他縣市）的區域外框，四周留一點空 */
+    /**
+     * 影片裡地圖的範圍（地圖座標 [x0, y0, x1, y1]）：畫面上看得到、而且不是淡灰（其他縣市）的區域外框，四周留一點空。
+     * 畫面上有本島時只框本島框（含澎湖、綠島、蘭嶼）內的部分：金門、馬祖、北方三島在框外，
+     * 一起框進來地圖會小很多（2026-11-27 維護者回饋：電腦畫面寬、整個框進直式影片太小）。只看金門或馬祖時照畫面範圍
+     */
     function videoMapArea(svg) {
         const { r, vx, vy, s, ox, oy } = viewOf(svg);
-        const v0 = vx - ox * s, w0 = vy - oy * s, v1 = v0 + r.width * s, w1 = w0 + r.height * s;
+        let v0 = vx - ox * s, w0 = vy - oy * s, v1 = v0 + r.width * s, w1 = w0 + r.height * s;
+        const items = svg._cv.items.filter(x => !(play.dim && play.dim.has(x.code)));
+        const hit = (b, a0, b0, a1, b1) => !(b[2] < a0 || b[0] > a1 || b[3] < b0 || b[1] > b1);
+        const mb = regionBox(REGIONS.main.box);
+        const m0 = Math.max(v0, mb.x), n0 = Math.max(w0, mb.y), m1 = Math.min(v1, mb.x + mb.w), n1 = Math.min(w1, mb.y + mb.h);
+        if (m1 > m0 && n1 > n0 && items.some(x => hit(x.box, m0, n0, m1, n1))) [v0, w0, v1, w1] = [m0, n0, m1, n1];
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-        for (const x of svg._cv.items) {
-            if (play.dim && play.dim.has(x.code)) continue;
+        for (const x of items) {
             const b = x.box;
-            if (b[2] < v0 || b[0] > v1 || b[3] < w0 || b[1] > w1) continue;
+            if (!hit(b, v0, w0, v1, w1)) continue;
             x0 = Math.min(x0, Math.max(b[0], v0)); y0 = Math.min(y0, Math.max(b[1], w0));
             x1 = Math.max(x1, Math.min(b[2], v1)); y1 = Math.max(y1, Math.min(b[3], w1));
         }
@@ -1539,7 +1554,7 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
 
     /** 影片的一格：底色（海）、上方文字、下方地圖（顏色跟著目前的淺色／深色主題） */
     function drawVideoFrame(ctx, svg, i, { W, H, nick, area }) {
-        goFrame(i);   // 彈窗裡的地圖跟著走（也算好這一格的顏色 svg._cv.fills）
+        // 畫面上的地圖不動（2026-11-27 維護者回饋：電腦上地圖跟著一格一格走，看起來像在錄影），只把這一格的上色借給影片用
         const css = getComputedStyle(svg), v = n => css.getPropertyValue(n).trim();
         const t = frameText(i);
         const u = W / 400;   // 影片 1 個「畫面點」幾個像素（線寬、字級以 400 點寬的手機畫面為準）
@@ -1576,11 +1591,20 @@ export function createExplore(root, { loadMap, loadDetail, manual: manualApi = n
         ctx.beginPath();
         ctx.rect(0, top, W, ah);
         ctx.clip();
-        paintMapTo(ctx, svg, { mx0, my0, s: sm * u, dpr: u, w: W / u, h: ah / u, tx: 0, ty: top });
+        const keep = svg._cv.fills;
+        svg._cv.fills = fillsAt(i);
+        try { paintMapTo(ctx, svg, { mx0, my0, s: sm * u, dpr: u, w: W / u, h: ah / u, tx: 0, ty: top }); }
+        finally { svg._cv.fills = keep; }
         ctx.restore();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
 
+    /** 第 i 格的上色：之前已解鎖淺橘、這一格新解鎖橘 */
+    function fillsAt(i) {
+        const f = play.frames[i], fills = new Map();
+        for (const t of playItems()) if (t.first < f.end) fills.set(t.code, t.first >= f.start ? PLAY_NOW_COLOR : PLAY_PAST_COLOR);
+        return fills;
+    }
     /** 播放範圍的總面積（km²）：鄉鎮或全島＝全部縣市；村里選了縣市＝那個縣市（或合併的一組） */
     function scopeArea() {
         let a = 0;
